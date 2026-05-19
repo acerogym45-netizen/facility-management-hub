@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스마트 시설 관리 플랫폼</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="shared-config.js"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    
+    <!-- 헤더 -->
+    <header class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-building text-white text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800">스마트 시설 관리 플랫폼</h1>
+                        <p class="text-sm text-gray-500">통합 관리 솔루션</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="max-w-7xl mx-auto px-4 py-12">
+        
+        <!-- 시설 선택 섹션 -->
+        <div class="text-center mb-12">
+            <h2 class="text-3xl font-bold text-gray-800 mb-3">시설 유형을 선택하세요</h2>
+            <p class="text-gray-600">관리하시는 시설에 맞는 맞춤형 솔루션을 제공합니다</p>
+        </div>
+
+        <!-- 시설 카드 그리드 -->
+        <div class="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            
+            <!-- 아파트/빌딩 관리 (ERP) -->
+            <div class="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:scale-105"
+                 onclick="goToFacility('apartment')">
+                <div class="bg-gradient-to-br from-green-500 to-emerald-600 p-8 text-white">
+                    <div class="flex items-center justify-between mb-4">
+                        <i class="fas fa-building text-6xl opacity-90"></i>
+                        <span class="bg-white/20 px-3 py-1 rounded-full text-sm">ERP</span>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-2">아파트 / 빌딩 관리</h3>
+                    <p class="text-green-100">관리사무소 전용</p>
+                </div>
+                <div class="p-6">
+                    <ul class="space-y-3">
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                            직원 출퇴근 관리
+                        </li>
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                            근태표 자동 생성
+                        </li>
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                            구매 요청 / 검수
+                        </li>
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                            휴가 관리
+                        </li>
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-green-500 mr-3"></i>
+                            민원 관리
+                        </li>
+                    </ul>
+                    <button class="w-full mt-6 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition-all">
+                        시작하기 <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 필라테스/헬스장 (CRM) -->
+            <div class="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:scale-105"
+                 onclick="goToFacility('fitness')">
+                <div class="bg-gradient-to-br from-purple-500 to-pink-600 p-8 text-white">
+                    <div class="flex items-center justify-between mb-4">
+                        <i class="fas fa-dumbbell text-6xl opacity-90"></i>
+                        <span class="bg-white/20 px-3 py-1 rounded-full text-sm">CRM</span>
+                    </div>
+                    <h3 class="text-2xl font-bold mb-2">필라테스 / 헬스장</h3>
+                    <p class="text-purple-100">회원 관리 전용</p>
+                </div>
+                <div class="p-6">
+                    <ul class="space-y-3">
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-purple-500 mr-3"></i>
+                            회원 출석 체크인
+                        </li>
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-purple-500 mr-3"></i>
+                            강사 관리
+                        </li>
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-purple-500 mr-3"></i>
+                            프로그램 관리
+                        </li>
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-purple-500 mr-3"></i>
+                            회원 문의 관리
+                        </li>
+                        <li class="flex items-center text-gray-700">
+                            <i class="fas fa-check-circle text-purple-500 mr-3"></i>
+                            공지사항 관리
+                        </li>
+                    </ul>
+                    <button class="w-full mt-6 bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 rounded-lg font-semibold hover:from-purple-600 hover:to-pink-700 transition-all">
+                        시작하기 <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 특징 섹션 -->
+        <div class="mt-20 text-center">
+            <h3 class="text-2xl font-bold text-gray-800 mb-8">왜 저희 플랫폼인가요?</h3>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-qrcode text-blue-600 text-2xl"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-2">QR 기반 시스템</h4>
+                    <p class="text-gray-600 text-sm">스마트폰으로 간편하게 체크인/아웃</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-cloud text-green-600 text-2xl"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-2">클라우드 기반</h4>
+                    <p class="text-gray-600 text-sm">언제 어디서나 실시간 접근 가능</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-chart-line text-purple-600 text-2xl"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-2">실시간 대시보드</h4>
+                    <p class="text-gray-600 text-sm">한눈에 보는 관리 현황</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 푸터 -->
+    <footer class="bg-white mt-20 py-8 shadow-inner">
+        <div class="max-w-7xl mx-auto px-4 text-center text-gray-600">
+            <p class="mb-2">© 2026 스마트 시설 관리 플랫폼. All rights reserved.</p>
+            <p class="text-sm">문의: support@example.com</p>
+        </div>
+    </footer>
+
+    <script>
+        // Supabase 클라이언트 초기화
+        let sb = null;
+        
+        window.addEventListener('DOMContentLoaded', async () => {
+            sb = createSharedSupabaseClient();
+            if (sb) {
+                await loadFacilities();
+            }
+        });
+        
+        // 시설 정보 로드
+        async function loadFacilities() {
+            try {
+                const { data, error } = await sb
+                    .from('facilities')
+                    .select('*')
+                    .in('type', ['apartment', 'fitness']);
+                
+                if (error) throw error;
+                
+                console.log('✅ Facilities loaded:', data);
+                // 실제 시설 데이터로 UI 업데이트 가능
+            } catch (err) {
+                console.error('❌ Failed to load facilities:', err);
+            }
+        }
+        
+        function goToFacility(type) {
+            if (type === 'apartment') {
+                // ERP 시스템으로 이동
+                window.location.href = 'apartment/index.html';
+            } else if (type === 'fitness') {
+                // CRM 시스템으로 이동
+                window.location.href = 'fitness/index.html';
+            }
+        }
+    </script>
+
+</body>
+</html>
