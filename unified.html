@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>통합 시설 관리 시스템</title>
+    
+    <!-- CDNs -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="shared-config.js"></script>
+    
+    <style>
+        .tab-active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .tab-inactive {
+            background: white;
+            color: #6b7280;
+            border: 1px solid #e5e7eb;
+        }
+        .sidebar-item:hover {
+            background: #f3f4f6;
+        }
+        .sidebar-active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    
+    <!-- 로그인 화면 -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-96">
+            <div class="text-center mb-6">
+                <div class="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
+                    <i class="fas fa-building text-white text-3xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800">통합 시설 관리</h1>
+                <p class="text-gray-600">관리자 로그인</p>
+            </div>
+            <input type="password" id="loginPin" placeholder="PIN 입력" 
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                   onkeypress="if(event.key==='Enter') unifiedApp.login()">
+            <button onclick="unifiedApp.login()" 
+                    class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg transition-all">
+                로그인
+            </button>
+        </div>
+    </div>
+
+    <!-- 메인 대시보드 -->
+    <div id="mainDashboard" style="display:none;">
+        <!-- 상단 헤더 -->
+        <header class="bg-white shadow-sm sticky top-0 z-50">
+            <div class="px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-building text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-800">통합 시설 관리 시스템</h1>
+                        <p class="text-xs text-gray-500">ERP + CRM Unified Platform</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="clock" class="text-sm text-gray-600"></div>
+                    <button onclick="unifiedApp.logout()" class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-all">
+                        <i class="fas fa-sign-out-alt mr-2"></i>로그아웃
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex">
+            <!-- 사이드바 -->
+            <aside class="w-64 bg-white h-screen sticky top-16 shadow-lg">
+                <nav class="p-4 space-y-2">
+                    <!-- 대시보드 -->
+                    <button onclick="unifiedApp.showSection('dashboard')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3 sidebar-active" data-section="dashboard">
+                        <i class="fas fa-home"></i>
+                        <span>대시보드</span>
+                    </button>
+
+                    <!-- 인원 관리 -->
+                    <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">인원 관리</div>
+                    <button onclick="unifiedApp.showSection('employees')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="employees">
+                        <i class="fas fa-user-tie"></i>
+                        <span>직원 관리 (ERP)</span>
+                    </button>
+                    <button onclick="unifiedApp.showSection('members')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="members">
+                        <i class="fas fa-users"></i>
+                        <span>회원 관리 (CRM)</span>
+                    </button>
+
+                    <!-- 출석 관리 -->
+                    <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">출석 관리</div>
+                    <button onclick="unifiedApp.showSection('attendance')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="attendance">
+                        <i class="fas fa-clock"></i>
+                        <span>출퇴근/출석 현황</span>
+                    </button>
+                    <button onclick="unifiedApp.showSection('qr-scan')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="qr-scan">
+                        <i class="fas fa-qrcode"></i>
+                        <span>QR 스캔</span>
+                    </button>
+
+                    <!-- ERP 기능 -->
+                    <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">ERP 기능</div>
+                    <button onclick="unifiedApp.showSection('purchases')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="purchases">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span>구매 관리</span>
+                    </button>
+                    <button onclick="unifiedApp.showSection('vacations')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="vacations">
+                        <i class="fas fa-umbrella-beach"></i>
+                        <span>휴가 관리</span>
+                    </button>
+
+                    <!-- CRM 기능 -->
+                    <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">CRM 기능</div>
+                    <button onclick="unifiedApp.showSection('instructors')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="instructors">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <span>강사 관리</span>
+                    </button>
+                    <button onclick="unifiedApp.showSection('programs')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="programs">
+                        <i class="fas fa-dumbbell"></i>
+                        <span>프로그램 관리</span>
+                    </button>
+
+                    <!-- 공통 -->
+                    <div class="pt-4 pb-2 px-4 text-xs font-semibold text-gray-500 uppercase">공통 기능</div>
+                    <button onclick="unifiedApp.showSection('inquiries')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="inquiries">
+                        <i class="fas fa-comment-dots"></i>
+                        <span>문의/민원</span>
+                    </button>
+                    <button onclick="unifiedApp.showSection('notices')" 
+                            class="sidebar-item w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3" data-section="notices">
+                        <i class="fas fa-bullhorn"></i>
+                        <span>공지사항</span>
+                    </button>
+                </nav>
+            </aside>
+
+            <!-- 메인 콘텐츠 -->
+            <main class="flex-1 p-8">
+                <!-- 대시보드 섹션 -->
+                <div id="section-dashboard" class="section-content">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">통합 대시보드</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <!-- 통계 카드 -->
+                        <div class="bg-white p-6 rounded-xl shadow-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-user-tie text-blue-600 text-xl"></i>
+                                </div>
+                                <span class="text-sm text-gray-500">ERP</span>
+                            </div>
+                            <div class="text-2xl font-bold text-gray-800" id="stat-employees">0</div>
+                            <div class="text-sm text-gray-600">직원 수</div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-xl shadow-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-users text-purple-600 text-xl"></i>
+                                </div>
+                                <span class="text-sm text-gray-500">CRM</span>
+                            </div>
+                            <div class="text-2xl font-bold text-gray-800" id="stat-members">0</div>
+                            <div class="text-sm text-gray-600">회원 수</div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-xl shadow-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                                </div>
+                                <span class="text-sm text-gray-500">오늘</span>
+                            </div>
+                            <div class="text-2xl font-bold text-gray-800" id="stat-attendance">0</div>
+                            <div class="text-sm text-gray-600">출석 인원</div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-xl shadow-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-comment-dots text-red-600 text-xl"></i>
+                                </div>
+                                <span class="text-sm text-gray-500">대기중</span>
+                            </div>
+                            <div class="text-2xl font-bold text-gray-800" id="stat-inquiries">0</div>
+                            <div class="text-sm text-gray-600">미처리 문의</div>
+                        </div>
+                    </div>
+
+                    <!-- 차트 -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-xl shadow-lg">
+                            <h3 class="text-lg font-bold text-gray-800 mb-4">주간 출석 현황</h3>
+                            <canvas id="weeklyChart" height="200"></canvas>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg">
+                            <h3 class="text-lg font-bold text-gray-800 mb-4">시설별 현황</h3>
+                            <canvas id="facilityChart" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 직원 관리 섹션 -->
+                <div id="section-employees" class="section-content" style="display:none;">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">직원 관리 (ERP)</h2>
+                        <button onclick="unifiedApp.openEmployeeModal()" 
+                                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-plus mr-2"></i>직원 추가
+                        </button>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">직책</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">연락처</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">QR코드</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">관리</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="employeeTableBody" class="divide-y divide-gray-200">
+                                    <!-- 동적 로딩 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 회원 관리 섹션 -->
+                <div id="section-members" class="section-content" style="display:none;">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800">회원 관리 (CRM)</h2>
+                        <button onclick="unifiedApp.openMemberModal()" 
+                                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                            <i class="fas fa-plus mr-2"></i>회원 추가
+                        </button>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">이름</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">연락처</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">회원권</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">기간</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">상태</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">관리</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="memberTableBody" class="divide-y divide-gray-200">
+                                    <!-- 동적 로딩 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 출석 현황 섹션 -->
+                <div id="section-attendance" class="section-content" style="display:none;">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">출퇴근/출석 현황</h2>
+                    
+                    <!-- 탭 -->
+                    <div class="flex space-x-2 mb-6">
+                        <button onclick="unifiedApp.switchAttendanceTab('employee')" 
+                                id="tab-employee" class="tab-active px-6 py-3 rounded-lg font-medium transition-all">
+                            직원 출퇴근
+                        </button>
+                        <button onclick="unifiedApp.switchAttendanceTab('member')" 
+                                id="tab-member" class="tab-inactive px-6 py-3 rounded-lg font-medium transition-all">
+                            회원 출석
+                        </button>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <div id="attendance-content">
+                            <!-- 동적 로딩 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 기타 섹션들 (구매, 휴가, 강사, 프로그램, 문의, 공지) -->
+                <div id="section-purchases" class="section-content" style="display:none;">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">구매 관리</h2>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <p class="text-gray-600">구매 요청 및 검수 관리 (ERP 기능)</p>
+                    </div>
+                </div>
+
+                <div id="section-vacations" class="section-content" style="display:none;">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">휴가 관리</h2>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <p class="text-gray-600">직원 휴가 신청 및 승인 (ERP 기능)</p>
+                    </div>
+                </div>
+
+                <div id="section-instructors" class="section-content" style="display:none;">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">강사 관리</h2>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <p class="text-gray-600">강사 정보 및 스케줄 관리 (CRM 기능)</p>
+                    </div>
+                </div>
+
+                <div id="section-programs" class="section-content" style="display:none;">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">프로그램 관리</h2>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <p class="text-gray-600">커리큘럼 및 프로그램 관리 (CRM 기능)</p>
+                    </div>
+                </div>
+
+                <div id="section-inquiries" class="section-content" style="display:none;">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">문의/민원 관리</h2>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <p class="text-gray-600">고객 문의 및 민원 처리 (통합)</p>
+                    </div>
+                </div>
+
+                <div id="section-notices" class="section-content" style="display:none;">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">공지사항 관리</h2>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <p class="text-gray-600">공지사항 작성 및 관리 (통합)</p>
+                    </div>
+                </div>
+
+                <div id="section-qr-scan" class="section-content" style="display:none;">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">QR 체크인/아웃</h2>
+                    <div class="bg-white rounded-xl shadow-lg p-6">
+                        <p class="text-gray-600">QR 코드 스캔 기능 (통합)</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // 통합 애플리케이션
+        const unifiedApp = {
+            sb: null,
+            currentUser: null,
+            employees: [],
+            members: [],
+            charts: {},
+
+            init: async function() {
+                console.log('🚀 통합 시스템 초기화');
+                this.sb = createSharedSupabaseClient();
+                this.updateClock();
+                setInterval(() => this.updateClock(), 1000);
+            },
+
+            login: function() {
+                const pin = document.getElementById('loginPin').value;
+                if (pin === 'admin2026' || pin === 'bdxi2026') {
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('mainDashboard').style.display = 'block';
+                    this.loadDashboard();
+                } else {
+                    alert('❌ 잘못된 PIN입니다.');
+                }
+            },
+
+            logout: function() {
+                if (confirm('로그아웃 하시겠습니까?')) {
+                    document.getElementById('mainDashboard').style.display = 'none';
+                    document.getElementById('loginScreen').style.display = 'flex';
+                    document.getElementById('loginPin').value = '';
+                }
+            },
+
+            showSection: function(sectionName) {
+                // 모든 섹션 숨기기
+                document.querySelectorAll('.section-content').forEach(el => el.style.display = 'none');
+                
+                // 선택된 섹션 표시
+                document.getElementById('section-' + sectionName).style.display = 'block';
+                
+                // 사이드바 활성화
+                document.querySelectorAll('.sidebar-item').forEach(el => {
+                    el.classList.remove('sidebar-active');
+                });
+                document.querySelector(`[data-section="${sectionName}"]`).classList.add('sidebar-active');
+
+                // 섹션별 데이터 로드
+                if (sectionName === 'employees') this.loadEmployees();
+                if (sectionName === 'members') this.loadMembers();
+                if (sectionName === 'attendance') this.loadAttendance();
+            },
+
+            updateClock: function() {
+                const now = new Date();
+                const timeStr = now.toLocaleString('ko-KR', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                const clockEl = document.getElementById('clock');
+                if (clockEl) clockEl.textContent = timeStr;
+            },
+
+            loadDashboard: async function() {
+                console.log('📊 대시보드 로드');
+                
+                // 통계 로드
+                await this.loadStats();
+                
+                // 차트 로드
+                this.loadCharts();
+            },
+
+            loadStats: async function() {
+                try {
+                    // 직원 수
+                    const { data: employees, error: empError } = await this.sb
+                        .from('employees')
+                        .select('id', { count: 'exact', head: true });
+                    if (!empError) document.getElementById('stat-employees').textContent = employees || 0;
+
+                    // 회원 수
+                    const { data: members, error: memError } = await this.sb
+                        .from('members')
+                        .select('id', { count: 'exact', head: true });
+                    if (!memError) document.getElementById('stat-members').textContent = members || 0;
+
+                    // 오늘 출석
+                    const today = new Date().toISOString().split('T')[0];
+                    const { data: attendance, error: attError } = await this.sb
+                        .from('attendance_records')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('date', today);
+                    if (!attError) document.getElementById('stat-attendance').textContent = attendance || 0;
+
+                    // 미처리 문의
+                    const { data: inquiries, error: inqError } = await this.sb
+                        .from('inquiries')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('status', 'pending');
+                    if (!inqError) document.getElementById('stat-inquiries').textContent = inquiries || 0;
+
+                } catch (err) {
+                    console.error('통계 로드 실패:', err);
+                }
+            },
+
+            loadCharts: function() {
+                // 주간 출석 차트
+                const weeklyCtx = document.getElementById('weeklyChart');
+                if (weeklyCtx) {
+                    this.charts.weekly = new Chart(weeklyCtx, {
+                        type: 'line',
+                        data: {
+                            labels: ['월', '화', '수', '목', '금', '토', '일'],
+                            datasets: [{
+                                label: '출석 인원',
+                                data: [12, 19, 15, 17, 14, 21, 18],
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                }
+
+                // 시설별 현황 차트
+                const facilityCtx = document.getElementById('facilityChart');
+                if (facilityCtx) {
+                    this.charts.facility = new Chart(facilityCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['직원 (ERP)', '회원 (CRM)'],
+                            datasets: [{
+                                data: [12, 45],
+                                backgroundColor: ['#667eea', '#764ba2']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false
+                        }
+                    });
+                }
+            },
+
+            loadEmployees: async function() {
+                console.log('👥 직원 목록 로드');
+                try {
+                    const { data, error } = await this.sb
+                        .from('employees')
+                        .select('*')
+                        .eq('facility_id', FACILITY_IDS.APARTMENT)
+                        .order('name');
+                    
+                    if (error) throw error;
+                    
+                    this.employees = data || [];
+                    this.renderEmployees();
+                } catch (err) {
+                    console.error('직원 로드 실패:', err);
+                }
+            },
+
+            renderEmployees: function() {
+                const tbody = document.getElementById('employeeTableBody');
+                if (!tbody) return;
+
+                if (this.employees.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">등록된 직원이 없습니다.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = this.employees.map(emp => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4">${emp.name}</td>
+                        <td class="px-6 py-4">${emp.position || '-'}</td>
+                        <td class="px-6 py-4">${emp.phone || '-'}</td>
+                        <td class="px-6 py-4"><code class="text-xs bg-gray-100 px-2 py-1 rounded">${emp.qr_code || '-'}</code></td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 text-xs rounded-full ${emp.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                                ${emp.is_active ? '재직' : '퇴사'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button onclick="unifiedApp.editEmployee('${emp.id}')" class="text-blue-600 hover:text-blue-800 mr-2">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="unifiedApp.deleteEmployee('${emp.id}')" class="text-red-600 hover:text-red-800">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            },
+
+            loadMembers: async function() {
+                console.log('👥 회원 목록 로드');
+                try {
+                    const { data, error } = await this.sb
+                        .from('members')
+                        .select('*')
+                        .eq('facility_id', FACILITY_IDS.FITNESS)
+                        .order('name');
+                    
+                    if (error) throw error;
+                    
+                    this.members = data || [];
+                    this.renderMembers();
+                } catch (err) {
+                    console.error('회원 로드 실패:', err);
+                }
+            },
+
+            renderMembers: function() {
+                const tbody = document.getElementById('memberTableBody');
+                if (!tbody) return;
+
+                if (this.members.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">등록된 회원이 없습니다.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = this.members.map(mem => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4">${mem.name}</td>
+                        <td class="px-6 py-4">${mem.phone || '-'}</td>
+                        <td class="px-6 py-4">${mem.membership_type || '-'}</td>
+                        <td class="px-6 py-4">${mem.start_date || '-'} ~ ${mem.end_date || '-'}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 text-xs rounded-full ${mem.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                                ${mem.is_active ? '활동' : '만료'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button onclick="unifiedApp.editMember('${mem.id}')" class="text-blue-600 hover:text-blue-800 mr-2">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="unifiedApp.deleteMember('${mem.id}')" class="text-red-600 hover:text-red-800">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            },
+
+            loadAttendance: function() {
+                console.log('📅 출석 현황 로드');
+                this.switchAttendanceTab('employee');
+            },
+
+            switchAttendanceTab: function(type) {
+                document.getElementById('tab-employee').classList.remove('tab-active');
+                document.getElementById('tab-employee').classList.add('tab-inactive');
+                document.getElementById('tab-member').classList.remove('tab-active');
+                document.getElementById('tab-member').classList.add('tab-inactive');
+                
+                if (type === 'employee') {
+                    document.getElementById('tab-employee').classList.add('tab-active');
+                    document.getElementById('tab-employee').classList.remove('tab-inactive');
+                    document.getElementById('attendance-content').innerHTML = '<p class="text-gray-600">직원 출퇴근 기록 (ERP)</p>';
+                } else {
+                    document.getElementById('tab-member').classList.add('tab-active');
+                    document.getElementById('tab-member').classList.remove('tab-inactive');
+                    document.getElementById('attendance-content').innerHTML = '<p class="text-gray-600">회원 출석 기록 (CRM)</p>';
+                }
+            },
+
+            openEmployeeModal: function() {
+                alert('직원 추가 모달 (구현 예정)');
+            },
+
+            openMemberModal: function() {
+                alert('회원 추가 모달 (구현 예정)');
+            },
+
+            editEmployee: function(id) {
+                alert('직원 수정: ' + id);
+            },
+
+            deleteEmployee: function(id) {
+                if (confirm('정말 삭제하시겠습니까?')) {
+                    alert('직원 삭제: ' + id);
+                }
+            },
+
+            editMember: function(id) {
+                alert('회원 수정: ' + id);
+            },
+
+            deleteMember: function(id) {
+                if (confirm('정말 삭제하시겠습니까?')) {
+                    alert('회원 삭제: ' + id);
+                }
+            }
+        };
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            unifiedApp.init();
+        });
+    </script>
+
+</body>
+</html>
