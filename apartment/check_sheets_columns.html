@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Sheets Column Check</title>
+</head>
+<body>
+    <h1>Google Sheets Column Structure Debug</h1>
+    <div id="output"></div>
+    
+    <script>
+    const sheetId = '1H3_V_FzXnt3cyzYeV4wokvaZEC2XRJ28dR1uubkfax4'; // 용인 몬테로이
+    const sheetName = '용인 몬테로이';
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+    
+    fetch(url)
+        .then(res => res.text())
+        .then(text => {
+            const jsonText = text.substring(47, text.length - 2);
+            const data = JSON.parse(jsonText);
+            
+            const output = document.getElementById('output');
+            
+            // Show column headers
+            const headerRow = data.table.rows[0];
+            output.innerHTML += '<h2>Headers (Row 0):</h2>';
+            output.innerHTML += '<table border="1"><tr>';
+            headerRow.c.forEach((cell, idx) => {
+                const letter = String.fromCharCode(65 + idx);
+                const value = cell?.v || cell?.f || 'null';
+                output.innerHTML += `<th>${letter}: ${value}</th>`;
+            });
+            output.innerHTML += '</tr></table>';
+            
+            // Show first 3 data rows
+            for (let i = 1; i <= 3 && i < data.table.rows.length; i++) {
+                const row = data.table.rows[i];
+                output.innerHTML += `<h2>Row ${i}:</h2>`;
+                output.innerHTML += '<table border="1"><tr>';
+                row.c.forEach((cell, idx) => {
+                    const letter = String.fromCharCode(65 + idx);
+                    const value = cell?.v || cell?.f || 'null';
+                    output.innerHTML += `<td><strong>${letter}:</strong> ${value}</td>`;
+                });
+                output.innerHTML += '</tr></table>';
+            }
+        });
+    </script>
+</body>
+</html>

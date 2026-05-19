@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 대시보드</title>
+    <link rel="stylesheet" href="/admin/css/admin.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="adminApp">
+
+        <!-- ══════════════════════════════════════════════════
+             로그인 화면 (bdxi 스타일)
+             ══════════════════════════════════════════════════ -->
+        <div id="loginScreen" class="login-screen">
+            <div class="login-wrapper">
+
+                <!-- 로고 영역 -->
+                <div class="login-brand">
+                    <div class="login-brand-icon"><i class="fas fa-building"></i></div>
+                    <div class="login-brand-name">APT ADMIN</div>
+                    <div class="login-brand-sub">무인 피트니스 통합 관리 시스템</div>
+                </div>
+
+                <!-- ─── 일반 관리자 로그인 카드 ─── -->
+                <div class="login-card" id="cardAdmin">
+                    <div class="login-card-header">
+                        <i class="fas fa-shield-alt login-card-icon"></i>
+                        <div>
+                            <h2>관리자 로그인</h2>
+                            <p>단지를 선택하고 비밀번호를 입력하세요</p>
+                        </div>
+                    </div>
+
+                    <!-- 단지 선택 드롭다운 -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-city"></i> 단지 선택
+                        </label>
+                        <div class="select-wrap" id="complexSelectWrap">
+                            <select id="loginComplexSelect" class="complex-select"
+                                    onchange="onComplexSelectChange(this.value)">
+                                <option value="">— 단지를 선택하세요 —</option>
+                            </select>
+                            <i class="fas fa-chevron-down select-arrow"></i>
+                        </div>
+                        <!-- 직접 코드 입력 (선택 못 했을 때) -->
+                        <input type="text" id="loginComplexCode"
+                               class="complex-code-input" style="display:none"
+                               placeholder="단지 코드 직접 입력 (예: apt-demo)"
+                               autocomplete="off">
+                        <div id="complexLoadStatus" class="complex-load-status"></div>
+                    </div>
+
+                    <!-- 비밀번호 -->
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-lock"></i> 관리자 비밀번호
+                        </label>
+                        <input type="password" id="loginPassword"
+                               placeholder="비밀번호 입력"
+                               onkeydown="if(event.key==='Enter') doLogin()"
+                               autocomplete="current-password">
+                    </div>
+
+                    <div id="loginError" class="error-msg" style="display:none"></div>
+
+                    <button class="btn-login btn-login-admin" onclick="doLogin()">
+                        <i class="fas fa-sign-in-alt"></i> 입장하기
+                    </button>
+
+                    <!-- 마스터 로그인 전환 링크 -->
+                    <div class="login-divider"><span>또는</span></div>
+                    <button class="btn-login btn-login-master" onclick="showMasterLogin()">
+                        <i class="fas fa-crown"></i> 총괄 관리자로 로그인
+                    </button>
+                </div>
+
+                <!-- ─── 마스터 관리자 로그인 카드 ─── -->
+                <div class="login-card login-card-master" id="cardMaster" style="display:none">
+                    <div class="login-card-header">
+                        <i class="fas fa-crown login-card-icon master-icon"></i>
+                        <div>
+                            <h2>총괄 관리자</h2>
+                            <p>전체 단지 통합 관리 시스템</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-key"></i> 마스터 비밀번호
+                        </label>
+                        <input type="password" id="masterPassword"
+                               placeholder="마스터 비밀번호 입력"
+                               onkeydown="if(event.key==='Enter') doMasterLogin()"
+                               autocomplete="off">
+                    </div>
+
+                    <div id="masterLoginError" class="error-msg" style="display:none"></div>
+
+                    <button class="btn-login btn-login-master-action" onclick="doMasterLogin()">
+                        <i class="fas fa-crown"></i> 총괄 관리자 입장
+                    </button>
+
+                    <div class="login-divider"><span>또는</span></div>
+                    <button class="btn-back-to-admin" onclick="showAdminLogin()">
+                        <i class="fas fa-arrow-left"></i> 일반 관리자 로그인으로 돌아가기
+                    </button>
+                </div>
+
+                <!-- 힌트 -->
+                <div class="login-hint-box" id="loginHintBox">
+                    <i class="fas fa-info-circle"></i>
+                    기본 단지: <code>apt-demo</code> | 비밀번호: <code>admin1234</code>
+                </div>
+
+            </div><!-- /.login-wrapper -->
+        </div><!-- /#loginScreen -->
+
+        <!-- ══════════════════════════════════════════════════
+             메인 레이아웃
+             ══════════════════════════════════════════════════ -->
+        <div id="mainLayout" style="display:none">
+            
+            <!-- 사이드바 -->
+            <aside id="sidebar" class="sidebar">
+                <div class="sidebar-logo">
+                    <i class="fas fa-building"></i>
+                    <div>
+                        <span id="sidebarComplexName">단지명</span>
+                        <small id="sidebarRoleBadge" class="sidebar-role-badge"></small>
+                    </div>
+                </div>
+
+                <!-- 마스터 전용: 단지 전환 셀렉터 -->
+                <div id="masterComplexSwitcher" style="display:none; padding:10px 16px 0;">
+                    <div class="master-switcher-box">
+                        <div class="master-switcher-label">
+                            <i class="fas fa-exchange-alt"></i> 단지 전환
+                        </div>
+                        <select id="masterComplexSelect"
+                                onchange="switchMasterComplex(this.value)"
+                                class="master-switcher-select">
+                            <option value="">🏙 전체 단지 (통합 보기)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <nav class="sidebar-nav">
+                    <div class="nav-group-label">운영 관리</div>
+                    <a href="#" class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+                        <i class="fas fa-chart-pie"></i> <span>대시보드</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="applications" onclick="navigate('applications')">
+                        <i class="fas fa-file-alt"></i> <span>신청 관리</span>
+                        <span class="nav-badge" id="navBadgeApp" style="display:none">0</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="cancellations" onclick="navigate('cancellations')">
+                        <i class="fas fa-times-circle"></i> <span>해지 관리</span>
+                        <span class="nav-badge" id="navBadgeCancel" style="display:none">0</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="inquiries" onclick="navigate('inquiries')">
+                        <i class="fas fa-comments"></i> <span>문의 관리</span>
+                        <span class="nav-badge" id="navBadgeInquiry" style="display:none">0</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="notices" onclick="navigate('notices')">
+                        <i class="fas fa-bullhorn"></i> <span>공지사항</span>
+                    </a>
+
+                    <a href="#" class="nav-item" data-page="settlement" onclick="navigate('settlement')">
+                        <i class="fas fa-file-invoice-dollar"></i> <span>월별 정산 리포트</span>
+                    </a>
+
+                    <div class="nav-group-label">콘텐츠</div>
+                    <a href="#" class="nav-item" data-page="programs" onclick="navigate('programs')">
+                        <i class="fas fa-dumbbell"></i> <span>프로그램 관리</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="instructors" onclick="navigate('instructors')">
+                        <i class="fas fa-user-tie"></i> <span>강사 관리</span>
+                    </a>
+                    <a href="#" class="nav-item" data-page="curricula" onclick="navigate('curricula')">
+                        <i class="fas fa-calendar-alt"></i> <span>커리큘럼</span>
+                    </a>
+
+                    <div class="nav-group-label">설정</div>
+                    <a href="#" class="nav-item" data-page="mycomplex" onclick="navigate('mycomplex')" id="myComplexMenu">
+                        <i class="fas fa-cog"></i> <span>내 단지 설정</span>
+                    </a>
+                    <a href="#" class="nav-item nav-master" data-page="complexes" onclick="navigate('complexes')" id="masterMenu" style="display:none">
+                        <i class="fas fa-city"></i> <span>전체 단지 관리</span>
+                        <span class="master-badge">MASTER</span>
+                    </a>
+                    <a href="#" class="nav-item nav-resident" onclick="goToResidentPage()">
+                        <i class="fas fa-mobile-alt"></i> <span>입주민 페이지</span>
+                    </a>
+                </nav>
+                <div class="sidebar-footer">
+                    <button class="btn-logout" onclick="doLogout()">
+                        <i class="fas fa-sign-out-alt"></i> 로그아웃
+                    </button>
+                </div>
+            </aside>
+
+            <!-- 모바일 사이드바 토글 -->
+            <button class="sidebar-toggle" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <!-- 메인 콘텐츠 -->
+            <main class="main-content">
+                <div id="pageContent"></div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 범용 모달 -->
+    <div id="globalModal" class="modal-overlay" onclick="closeGlobalModal()">
+        <div class="modal-content modal-lg" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="globalModalTitle">모달</h3>
+                <button class="modal-close" onclick="closeGlobalModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="globalModalBody"></div>
+            <div class="modal-footer" id="globalModalFooter"></div>
+        </div>
+    </div>
+
+    <!-- 확인 모달 -->
+    <div id="confirmModal" class="modal-overlay">
+        <div class="modal-content modal-sm" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="confirmTitle">확인</h3>
+            </div>
+            <div class="modal-body"><p id="confirmMessage"></p></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeConfirmModal()">취소</button>
+                <button class="btn-danger" id="confirmOkBtn">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="adminToast" class="toast" style="display:none"></div>
+
+    <script src="/js/api.js?v=20260504b"></script>
+    <script src="/admin/js/admin-app.js?v=20260504b"></script>
+    <script src="/admin/js/pages/dashboard.js?v=20260504b"></script>
+    <script src="/admin/js/pages/applications.js?v=20260504b"></script>
+    <script src="/admin/js/pages/cancellations.js?v=20260504b"></script>
+    <script src="/admin/js/pages/inquiries.js?v=20260504b"></script>
+    <script src="/admin/js/pages/notices.js?v=20260504b"></script>
+    <script src="/admin/js/pages/programs.js?v=20260504b"></script>
+    <script src="/admin/js/pages/instructors.js?v=20260504b"></script>
+    <script src="/admin/js/pages/curricula.js?v=20260504b"></script>
+    <script src="/admin/js/pages/complexes.js?v=20260504b"></script>
+    <script src="/admin/js/pages/mycomplex.js?v=20260504b"></script>
+    <script src="/admin/js/pages/settlement.js?v=20260505a"></script>
+</body>
+</html>

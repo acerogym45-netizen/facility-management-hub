@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Sheets Test</title>
+</head>
+<body>
+    <h1>Testing Google Sheets API</h1>
+    <div id="output"></div>
+    
+    <script>
+        async function fetchComplaintsFromGoogleSheets(sheetId, sheetName = '월간 민원 처리 현황 DB') {
+            try {
+                if (!sheetId) {
+                    console.warn('⚠️ Google Sheets ID가 없습니다');
+                    return [];
+                }
+                
+                const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+                console.log('🔍 Fetching from URL:', url);
+                
+                const response = await fetch(url);
+                console.log('📡 Response status:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error(`Google Sheets 로드 실패: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                console.log('📄 Response text length:', text.length);
+                console.log('📄 First 200 chars:', text.substring(0, 200));
+                
+                const jsonText = text.substring(47, text.length - 2);
+                const data = JSON.parse(jsonText);
+                
+                console.log('✅ Parsed data:', data);
+                
+                const rows = data.table.rows;
+                const complaints = rows.map(row => {
+                    const cells = row.c;
+                    return {
+                        date: cells[0]?.v || '-',
+                        location: cells[1]?.v || '-',
+                        content: cells[2]?.v || '-',
+                        status: cells[3]?.v || '-',
+                        result: cells[4]?.v || '-',
+                        completeDate: cells[5]?.v || '-'
+                    };
+                });
+                
+                console.log('📋 Complaints:', complaints);
+                return complaints;
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                return [];
+            }
+        }
+        
+        // Test with a known Sheet ID from your apartments
+        // We need to get an actual google_sheet_id from the database
+        document.getElementById('output').innerHTML = '<p>Open console to see results...</p>';
+        
+        // First, let's fetch apartments to get their google_sheet_id
+        async function testWithRealData() {
+            try {
+                const response = await fetch('https://your-supabase-url.supabase.co/rest/v1/apartments?select=id,name,google_sheet_id', {
+                    headers: {
+                        'apikey': 'your-api-key',
+                        'Authorization': 'Bearer your-api-key'
+                    }
+                });
+                
+                const apartments = await response.json();
+                console.log('🏢 Apartments:', apartments);
+                
+                // Find first apartment with google_sheet_id
+                const aptWithSheets = apartments.find(apt => apt.google_sheet_id);
+                if (aptWithSheets) {
+                    console.log('🎯 Testing with:', aptWithSheets.name, aptWithSheets.google_sheet_id);
+                    const complaints = await fetchComplaintsFromGoogleSheets(aptWithSheets.google_sheet_id);
+                    console.log('📊 Result:', complaints.length, 'complaints');
+                    document.getElementById('output').innerHTML = `
+                        <p>Apartment: ${aptWithSheets.name}</p>
+                        <p>Complaints found: ${complaints.length}</p>
+                        <pre>${JSON.stringify(complaints.slice(0, 3), null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('❌ Test failed:', error);
+            }
+        }
+    </script>
+</body>
+</html>

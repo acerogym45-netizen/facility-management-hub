@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>급여명세서 조회 | KINDWON</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .card {
+      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.95);
+    }
+    .payroll-card {
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .payroll-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+    }
+  </style>
+</head>
+<body class="p-4">
+  
+  <div class="max-w-6xl mx-auto">
+    <!-- 헤더 -->
+    <div class="card rounded-2xl shadow-2xl p-6 mb-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-800 mb-1">
+            <i class="fas fa-file-invoice-dollar text-purple-600 mr-2"></i>
+            급여명세서 조회
+          </h1>
+          <p class="text-gray-600">
+            <span id="employee-name" class="font-semibold">로딩 중...</span>님, 환영합니다
+          </p>
+        </div>
+        <div class="flex gap-3">
+          <button onclick="changePassword()" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm">
+            <i class="fas fa-key mr-2"></i>비밀번호 변경
+          </button>
+          <button onclick="logout()" class="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm">
+            <i class="fas fa-sign-out-alt mr-2"></i>로그아웃
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 통계 카드 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div class="card rounded-xl shadow-lg p-4">
+        <div class="text-sm text-gray-600 mb-1">전체 명세서</div>
+        <div class="text-3xl font-bold text-blue-600" id="total-count">0</div>
+      </div>
+      <div class="card rounded-xl shadow-lg p-4">
+        <div class="text-sm text-gray-600 mb-1">미확인</div>
+        <div class="text-3xl font-bold text-orange-600" id="pending-count">0</div>
+      </div>
+      <div class="card rounded-xl shadow-lg p-4">
+        <div class="text-sm text-gray-600 mb-1">확인 완료</div>
+        <div class="text-3xl font-bold text-green-600" id="viewed-count">0</div>
+      </div>
+      <div class="card rounded-xl shadow-lg p-4">
+        <div class="text-sm text-gray-600 mb-1">최근 명세서</div>
+        <div class="text-lg font-bold text-purple-600" id="latest-month">-</div>
+      </div>
+    </div>
+
+    <!-- 급여명세서 목록 -->
+    <div class="card rounded-2xl shadow-2xl p-6">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">
+          <i class="fas fa-list mr-2 text-purple-600"></i>급여명세서 목록
+        </h2>
+        <button onclick="loadPayrollList()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm">
+          <i class="fas fa-sync-alt mr-2"></i>새로고침
+        </button>
+      </div>
+
+      <!-- 필터 -->
+      <div class="mb-6 flex gap-3">
+        <select id="filter-year" onchange="loadPayrollList()" class="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-600 focus:outline-none">
+          <option value="">전체 년도</option>
+          <option value="2026">2026년</option>
+          <option value="2025">2025년</option>
+          <option value="2024">2024년</option>
+        </select>
+        <select id="filter-status" onchange="loadPayrollList()" class="px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-600 focus:outline-none">
+          <option value="">전체 상태</option>
+          <option value="pending">미확인</option>
+          <option value="viewed">확인함</option>
+          <option value="downloaded">다운로드함</option>
+        </select>
+      </div>
+
+      <!-- 목록 -->
+      <div id="payroll-list" class="space-y-4">
+        <!-- 로딩 -->
+        <div class="text-center py-20">
+          <i class="fas fa-spinner fa-spin text-4xl text-purple-600 mb-4"></i>
+          <p class="text-gray-600">급여명세서를 불러오는 중...</p>
+        </div>
+      </div>
+
+      <!-- 빈 상태 -->
+      <div id="empty-state" class="hidden text-center py-20">
+        <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
+        <p class="text-xl text-gray-500 mb-2">등록된 급여명세서가 없습니다</p>
+        <p class="text-sm text-gray-400">명세서가 등록되면 여기에 표시됩니다</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 비밀번호 변경 모달 -->
+  <div id="password-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div class="card rounded-2xl shadow-2xl p-8 w-full max-w-md">
+      <h2 class="text-2xl font-bold text-gray-800 mb-6">
+        <i class="fas fa-key text-orange-600 mr-2"></i>비밀번호 변경
+      </h2>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">현재 비밀번호</label>
+          <input type="password" id="current-password" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-600 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">새 비밀번호</label>
+          <input type="password" id="new-password-modal" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-600 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">비밀번호 확인</label>
+          <input type="password" id="confirm-password-modal" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-600 focus:outline-none">
+        </div>
+      </div>
+
+      <div class="flex gap-3 mt-6">
+        <button onclick="closePasswordModal()" class="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors font-medium">
+          취소
+        </button>
+        <button onclick="submitPasswordChange()" class="flex-1 px-6 py-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors font-medium">
+          변경
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Supabase 초기화
+    const SUPABASE_URL = 'https://cvvtwdmhtzbclrwtpdry.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2dnR3ZG1odHpiY2xyd3RwZHJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5NDk1NzksImV4cCI6MjA2MjUyNTU3OX0.wXLZTRjZvnI7FO2xT1P_RqYXc85g_2OMfkS6T7Goz_M';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentEmployee = null;
+
+    // 페이지 로드 시 초기화
+    window.addEventListener('load', async () => {
+      // 세션 확인
+      const employeeId = sessionStorage.getItem('payroll_employee_id');
+      const employeeName = sessionStorage.getItem('payroll_employee_name');
+      
+      if (!employeeId || !employeeName) {
+        alert('로그인이 필요합니다.');
+        window.location.href = 'employee_payroll_login.html';
+        return;
+      }
+
+      // 직원 정보 로드
+      await loadEmployeeInfo(employeeId);
+      
+      // 급여명세서 목록 로드
+      await loadPayrollList();
+    });
+
+    // 직원 정보 로드
+    async function loadEmployeeInfo(employeeId) {
+      try {
+        const { data, error } = await supabase
+          .from('employees')
+          .select('*')
+          .eq('id', employeeId)
+          .single();
+
+        if (error || !data) {
+          console.error('직원 정보 로드 실패:', error);
+          return;
+        }
+
+        currentEmployee = data;
+        document.getElementById('employee-name').textContent = data.name;
+      } catch (err) {
+        console.error('직원 정보 로드 오류:', err);
+      }
+    }
+
+    // 급여명세서 목록 로드
+    async function loadPayrollList() {
+      const listContainer = document.getElementById('payroll-list');
+      const emptyState = document.getElementById('empty-state');
+      
+      listContainer.innerHTML = '<div class="text-center py-10"><i class="fas fa-spinner fa-spin text-2xl text-purple-600"></i></div>';
+      emptyState.classList.add('hidden');
+
+      try {
+        const employeeId = sessionStorage.getItem('payroll_employee_id');
+        
+        let query = supabase
+          .from('payroll_statements')
+          .select('*')
+          .eq('employee_id', employeeId)
+          .order('year_month', { ascending: false });
+
+        // 필터 적용
+        const filterYear = document.getElementById('filter-year').value;
+        const filterStatus = document.getElementById('filter-status').value;
+        
+        if (filterYear) {
+          query = query.ilike('year_month', `${filterYear}%`);
+        }
+        if (filterStatus) {
+          query = query.eq('status', filterStatus);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('명세서 로드 실패:', error);
+          listContainer.innerHTML = '<div class="text-center py-10 text-red-500">로드 실패</div>';
+          return;
+        }
+
+        // 통계 업데이트
+        updateStatistics(data);
+
+        if (!data || data.length === 0) {
+          listContainer.innerHTML = '';
+          emptyState.classList.remove('hidden');
+          return;
+        }
+
+        // 카드 렌더링
+        listContainer.innerHTML = '';
+        data.forEach(payroll => {
+          const card = createPayrollCard(payroll);
+          listContainer.appendChild(card);
+        });
+
+      } catch (err) {
+        console.error('명세서 로드 오류:', err);
+        listContainer.innerHTML = '<div class="text-center py-10 text-red-500">오류 발생</div>';
+      }
+    }
+
+    // 통계 업데이트
+    function updateStatistics(data) {
+      const total = data.length;
+      const pending = data.filter(p => p.status === 'pending').length;
+      const viewed = data.filter(p => p.status !== 'pending').length;
+      const latest = data.length > 0 ? data[0].year_month : '-';
+
+      document.getElementById('total-count').textContent = total;
+      document.getElementById('pending-count').textContent = pending;
+      document.getElementById('viewed-count').textContent = viewed;
+      document.getElementById('latest-month').textContent = formatYearMonth(latest);
+    }
+
+    // 급여명세서 카드 생성
+    function createPayrollCard(payroll) {
+      const div = document.createElement('div');
+      div.className = 'payroll-card bg-white rounded-xl shadow-md p-6 border-2 border-gray-100';
+      
+      // 상태 배지
+      let statusBadge = '';
+      let statusClass = '';
+      if (payroll.status === 'pending') {
+        statusBadge = '🔔 미확인';
+        statusClass = 'bg-orange-100 text-orange-800';
+      } else if (payroll.status === 'viewed') {
+        statusBadge = '✅ 확인함';
+        statusClass = 'bg-green-100 text-green-800';
+      } else if (payroll.status === 'downloaded') {
+        statusBadge = '⬇️ 다운로드함';
+        statusClass = 'bg-blue-100 text-blue-800';
+      }
+
+      div.innerHTML = `
+        <div class="flex justify-between items-start mb-4">
+          <div>
+            <h3 class="text-xl font-bold text-gray-800 mb-1">
+              <i class="fas fa-calendar-alt text-purple-600 mr-2"></i>
+              ${formatYearMonth(payroll.year_month)}
+            </h3>
+            <p class="text-sm text-gray-500">
+              등록일: ${new Date(payroll.uploaded_at).toLocaleDateString('ko-KR')}
+            </p>
+          </div>
+          <span class="px-3 py-1 rounded-full text-xs font-medium ${statusClass}">
+            ${statusBadge}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-4 text-sm">
+          <div>
+            <span class="text-gray-600">조회 횟수:</span>
+            <span class="font-semibold text-gray-800">${payroll.view_count}회</span>
+          </div>
+          <div>
+            <span class="text-gray-600">다운로드:</span>
+            <span class="font-semibold text-gray-800">${payroll.download_count}회</span>
+          </div>
+          ${payroll.first_viewed_at ? `
+          <div class="col-span-2">
+            <span class="text-gray-600">최초 확인:</span>
+            <span class="font-semibold text-gray-800">${new Date(payroll.first_viewed_at).toLocaleString('ko-KR')}</span>
+          </div>
+          ` : ''}
+        </div>
+
+        <div class="flex gap-3">
+          <button onclick="viewPayroll('${payroll.id}')" class="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
+            <i class="fas fa-eye mr-2"></i>조회
+          </button>
+          <button onclick="downloadPayroll('${payroll.id}', '${payroll.file_url}')" class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+            <i class="fas fa-download mr-2"></i>다운로드
+          </button>
+        </div>
+      `;
+
+      return div;
+    }
+
+    // 년월 포맷
+    function formatYearMonth(yearMonth) {
+      if (!yearMonth || yearMonth === '-') return '-';
+      const [year, month] = yearMonth.split('-');
+      return `${year}년 ${parseInt(month)}월`;
+    }
+
+    // 명세서 조회
+    async function viewPayroll(payrollId) {
+      try {
+        // 조회 기록 업데이트
+        const { error } = await supabase
+          .from('payroll_statements')
+          .update({
+            last_viewed_at: new Date().toISOString()
+          })
+          .eq('id', payrollId);
+
+        if (error) {
+          console.error('조회 기록 업데이트 실패:', error);
+        }
+
+        // 파일 URL 가져오기
+        const { data: payroll } = await supabase
+          .from('payroll_statements')
+          .select('file_url')
+          .eq('id', payrollId)
+          .single();
+
+        if (payroll && payroll.file_url) {
+          window.open(payroll.file_url, '_blank');
+          
+          // 목록 새로고침
+          setTimeout(() => loadPayrollList(), 1000);
+        }
+
+      } catch (err) {
+        console.error('명세서 조회 오류:', err);
+        alert('명세서 조회 중 오류가 발생했습니다.');
+      }
+    }
+
+    // 명세서 다운로드
+    async function downloadPayroll(payrollId, fileUrl) {
+      try {
+        // 다운로드 횟수 증가
+        const { data: current } = await supabase
+          .from('payroll_statements')
+          .select('download_count, status')
+          .eq('id', payrollId)
+          .single();
+
+        await supabase
+          .from('payroll_statements')
+          .update({
+            download_count: (current.download_count || 0) + 1,
+            status: 'downloaded',
+            last_viewed_at: new Date().toISOString()
+          })
+          .eq('id', payrollId);
+
+        // 다운로드 실행
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.download = '';
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // 목록 새로고침
+        setTimeout(() => loadPayrollList(), 1000);
+
+      } catch (err) {
+        console.error('다운로드 오류:', err);
+        alert('다운로드 중 오류가 발생했습니다.');
+      }
+    }
+
+    // 비밀번호 변경 모달 열기
+    function changePassword() {
+      document.getElementById('password-modal').classList.remove('hidden');
+      document.getElementById('current-password').value = '';
+      document.getElementById('new-password-modal').value = '';
+      document.getElementById('confirm-password-modal').value = '';
+    }
+
+    // 비밀번호 변경 모달 닫기
+    function closePasswordModal() {
+      document.getElementById('password-modal').classList.add('hidden');
+    }
+
+    // 비밀번호 변경 제출
+    async function submitPasswordChange() {
+      const currentPassword = document.getElementById('current-password').value.trim();
+      const newPassword = document.getElementById('new-password-modal').value.trim();
+      const confirmPassword = document.getElementById('confirm-password-modal').value.trim();
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        alert('모든 필드를 입력하세요.');
+        return;
+      }
+
+      if (newPassword.length < 4) {
+        alert('새 비밀번호는 최소 4자리 이상이어야 합니다.');
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        alert('새 비밀번호가 일치하지 않습니다.');
+        return;
+      }
+
+      try {
+        // 현재 비밀번호 확인
+        const { data: emp, error: fetchError } = await supabase
+          .from('employees')
+          .select('login_password')
+          .eq('id', currentEmployee.id)
+          .single();
+
+        if (fetchError || !emp) {
+          alert('직원 정보를 찾을 수 없습니다.');
+          return;
+        }
+
+        if (emp.login_password !== currentPassword) {
+          alert('현재 비밀번호가 일치하지 않습니다.');
+          return;
+        }
+
+        // 비밀번호 변경
+        const { error: updateError } = await supabase
+          .from('employees')
+          .update({
+            login_password: newPassword,
+            password_changed_at: new Date().toISOString(),
+            force_password_change: false
+          })
+          .eq('id', currentEmployee.id);
+
+        if (updateError) {
+          console.error('비밀번호 변경 실패:', updateError);
+          alert('비밀번호 변경에 실패했습니다.');
+          return;
+        }
+
+        alert('✅ 비밀번호가 성공적으로 변경되었습니다!');
+        closePasswordModal();
+
+      } catch (err) {
+        console.error('비밀번호 변경 오류:', err);
+        alert('비밀번호 변경 중 오류가 발생했습니다.');
+      }
+    }
+
+    // 로그아웃
+    function logout() {
+      if (confirm('로그아웃 하시겠습니까?')) {
+        sessionStorage.removeItem('payroll_employee_id');
+        sessionStorage.removeItem('payroll_employee_name');
+        window.location.href = 'employee_payroll_login.html';
+      }
+    }
+  </script>
+</body>
+</html>

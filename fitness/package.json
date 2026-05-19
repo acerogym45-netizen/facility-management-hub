@@ -1,0 +1,29 @@
+{
+  "name": "apartment-qr-system",
+  "version": "1.0.0",
+  "description": "아파트 단지 QR코드 무인 응대 시스템",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.103.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.2.0",
+    "helmet": "^7.1.0",
+    "iconv-lite": "^0.7.2",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.20.0",
+    "solapi": "^6.0.1",
+    "uuid": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "form-data": "^4.0.5"
+  }
+}

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>구역 감지 테스트</title>
+</head>
+<body>
+    <h1>구역명 자동 감지 테스트</h1>
+    <div id="results"></div>
+    
+    <script>
+        // 실제 코드에서 사용하는 함수 복사
+        function detectBackgroundFromName(name) {
+          const nameLower = name.toLowerCase().replace(/\s/g, '');
+          
+          console.log('🔎 배경 감지 시작:', name, '→ 정규화:', nameLower);
+          
+          // 골프장
+          if (nameLower.includes('골프') || nameLower.includes('golf')) {
+            console.log('  ✅ 골프장 감지');
+            return 'golf';
+          } 
+          // 인포데스크
+          else if (nameLower.includes('인포') || nameLower.includes('info') || 
+                   nameLower.includes('안내') || nameLower.includes('데스크') || 
+                   nameLower.includes('desk') || nameLower.includes('information')) {
+            console.log('  ✅ 인포데스크 감지');
+            return 'information';
+          } 
+          // 수영장
+          else if (nameLower.includes('수영') || nameLower.includes('pool') || 
+                   nameLower.includes('swimming') || nameLower.includes('워터')) {
+            console.log('  ✅ 수영장 감지');
+            return 'pool';
+          } 
+          // 사우나
+          else if (nameLower.includes('사우나') || nameLower.includes('sauna') || 
+                   nameLower.includes('찜질') || nameLower.includes('남자') || 
+                   nameLower.includes('여자') || nameLower.includes('탕')) {
+            console.log('  ✅ 사우나 감지');
+            return 'sauna';
+          } 
+          // 헬스장 (fitness)
+          else if (nameLower.includes('헬스') || nameLower.includes('fitness') || 
+                   nameLower.includes('gym') || nameLower.includes('운동') ||
+                   nameLower.includes('체육')) {
+            console.log('  ✅ 헬스장 감지');
+            return 'fitness';
+          } 
+          // 기타 (기본값: fitness)
+          else {
+            console.log('  ⚠️ 매칭 실패, 기본값(fitness) 사용');
+            return 'fitness';
+          }
+        }
+        
+        // 테스트할 구역명들
+        const testCases = [
+            '카페테리아',
+            '헬스장',
+            '다목적 체육관',
+            '작은도서관',
+            '게스트하우스 1호실',
+            '게스트하우스 2호실',
+            '게스트하우스 3호실',
+            '학장실',
+            '기타 구역',
+            '사무실',
+            '남자 사우나',
+            '여자 사우나',
+            '골프장',
+            '인포데스크',
+            '수영장'
+        ];
+        
+        const results = document.getElementById('results');
+        let html = '<table border="1" style="border-collapse: collapse; width: 100%;"><tr><th>구역명</th><th>감지된 타입</th><th>표시명</th></tr>';
+        
+        testCases.forEach(zoneName => {
+            const bgType = detectBackgroundFromName(zoneName);
+            const displayName = bgType === 'fitness' ? '헬스장' : 
+                              bgType === 'golf' ? '골프장' : 
+                              bgType === 'information' ? '인포데스크' : 
+                              bgType === 'pool' ? '수영장' : 
+                              bgType === 'sauna' ? '사우나' : '기타';
+            
+            html += `<tr><td>${zoneName}</td><td>${bgType}</td><td>${displayName}</td></tr>`;
+        });
+        
+        html += '</table>';
+        results.innerHTML = html;
+    </script>
+</body>
+</html>

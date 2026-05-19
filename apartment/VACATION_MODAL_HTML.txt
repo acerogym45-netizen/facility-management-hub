@@ -1,0 +1,104 @@
+<!-- 이 내용을 scan.html의 </main> 뒤, Purchase Inspection Modal 앞에 삽입 -->
+
+<!-- 🆕 Vacation Management Modal -->
+<div id="vacation-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+    <!-- Header -->
+    <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-yellow-500 to-orange-600">
+      <h3 class="text-xl font-bold text-white flex items-center gap-2">
+        <i class="fas fa-umbrella-beach"></i>
+        휴가 관리
+      </h3>
+      <button onclick="app.closeVacationModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+        <i class="fas fa-times text-xl"></i>
+      </button>
+    </div>
+
+    <!-- New Vacation Request Button -->
+    <div class="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border-b">
+      <button onclick="app.showNewVacationForm()" class="w-full px-6 py-3 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-xl hover:from-yellow-600 hover:to-orange-700 transition-all shadow-md font-bold flex items-center justify-center gap-2">
+        <i class="fas fa-plus-circle text-xl"></i>
+        새 휴가 신청
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b bg-gray-50">
+      <button onclick="app.switchVacationTab('pending')" id="vacation-tab-pending" class="flex-1 px-4 py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-yellow-600 transition-colors">
+        <i class="fas fa-clock mr-1"></i>승인 대기 <span id="vacation-count-pending" class="ml-1 px-2 py-0.5 text-xs font-bold bg-orange-100 text-orange-600 rounded-full">0</span>
+      </button>
+      <button onclick="app.switchVacationTab('approved')" id="vacation-tab-approved" class="flex-1 px-4 py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-yellow-600 transition-colors">
+        <i class="fas fa-check-circle mr-1"></i>승인됨 <span id="vacation-count-approved" class="ml-1 px-2 py-0.5 text-xs font-bold bg-green-100 text-green-600 rounded-full">0</span>
+      </button>
+      <button onclick="app.switchVacationTab('rejected')" id="vacation-tab-rejected" class="flex-1 px-4 py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-yellow-600 transition-colors">
+        <i class="fas fa-times-circle mr-1"></i>거부됨 <span id="vacation-count-rejected" class="ml-1 px-2 py-0.5 text-xs font-bold bg-red-100 text-red-600 rounded-full">0</span>
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div id="vacation-list" class="p-6 overflow-y-auto" style="max-height: 60vh;">
+      <div id="loading-vacations" class="text-center py-8">
+        <i class="fas fa-spinner fa-spin text-4xl text-yellow-600"></i>
+        <p class="mt-4 text-gray-600">불러오는 중...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 🆕 New Vacation Request Form Modal -->
+<div id="new-vacation-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+    <!-- Header -->
+    <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-yellow-500 to-orange-600">
+      <h3 class="text-xl font-bold text-white flex items-center gap-2">
+        <i class="fas fa-plus-circle"></i>
+        휴가 신청
+      </h3>
+      <button onclick="app.closeNewVacationForm()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+        <i class="fas fa-times text-xl"></i>
+      </button>
+    </div>
+
+    <!-- Form -->
+    <form id="vacation-form" class="p-6 space-y-4" onsubmit="app.submitVacationRequest(event)">
+      <!-- Vacation Type -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">휴가 유형</label>
+        <select id="vacation-type" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+          <option value="연차">연차</option>
+          <option value="병가">병가</option>
+          <option value="경조사">경조사</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
+
+      <!-- Start Date -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">시작일</label>
+        <input type="date" id="vacation-start" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent" />
+      </div>
+
+      <!-- End Date -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">종료일</label>
+        <input type="date" id="vacation-end" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent" />
+      </div>
+
+      <!-- Note -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">사유 (선택)</label>
+        <textarea id="vacation-note" rows="3" placeholder="휴가 사유를 입력하세요..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent"></textarea>
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="app.closeNewVacationForm()" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+          취소
+        </button>
+        <button type="submit" class="flex-1 px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg hover:from-yellow-600 hover:to-orange-700 transition-colors font-bold">
+          신청
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

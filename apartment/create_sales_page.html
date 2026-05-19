@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>매출 테이블 생성 - DB 마이그레이션</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            text-align: center;
+            color: #1b5e3e;
+            margin-bottom: 30px;
+        }
+        .info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin-bottom: 30px;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 30px;
+        }
+        .step {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #1b5e3e;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #1b5e3e;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #145030;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 매출 관리 테이블 생성</h1>
+        
+        <div class="info">
+            <strong>📋 작업 내용:</strong><br>
+            • <code>sales</code> 테이블 생성 (아파트별 월별 매출 기록)<br>
+            • 인덱스, RLS 정책, 자동 트리거 설정<br>
+            • 개별 아파트 페이지에 매출 입력란 추가<br>
+            • 총괄 관리자 페이지에 매출 통계 표시
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ 중요:</strong><br>
+            • 이 SQL은 Supabase Dashboard → SQL Editor에서 실행해야 합니다.<br>
+            • 아래 버튼은 테이블 존재 여부만 확인합니다.<br>
+            • 실제 테이블 생성은 직접 SQL을 복사해서 Supabase에서 실행하세요.
+        </div>
+
+        <div class="step">
+            <h3>📝 Step 1: Supabase SQL Editor에서 실행할 SQL</h3>
+            <pre style="background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 12px;">-- 매출 기록 테이블 생성
+CREATE TABLE IF NOT EXISTS sales (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    apartment_id UUID REFERENCES apartments(id) ON DELETE CASCADE,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
+    amount DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    note TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    UNIQUE(apartment_id, year, month)
+);
+
+-- 인덱스 생성
+CREATE INDEX IF NOT EXISTS idx_sales_apartment ON sales(apartment_id);
+CREATE INDEX IF NOT EXISTS idx_sales_year_month ON sales(year, month);
+CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(year, month, apartment_id);
+
+-- Row Level Security 활성화
+ALTER TABLE sales ENABLE ROW LEVEL SECURITY;
+
+-- 정책 생성
+CREATE POLICY "Allow all" ON sales FOR ALL USING (true);
+
+-- 업데이트 시각 자동 갱신 트리거
+CREATE OR REPLACE FUNCTION update_sales_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = timezone('utc'::text, now());
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_sales_updated_at_trigger
+    BEFORE UPDATE ON sales
+    FOR EACH ROW
+    EXECUTE FUNCTION update_sales_updated_at();</pre>
+        </div>
+
+        <button onclick="copySql()">📋 SQL 복사하기</button>
+        <button onclick="openSupabase()">🔗 Supabase Dashboard 열기</button>
+        <button onclick="checkTable()">✅ 테이블 생성 확인</button>
+
+        <div id="result"></div>
+
+        <div style="margin-top: 30px; padding: 20px; background: #f0f0f0; border-radius: 8px;">
+            <h3>💡 사용 방법</h3>
+            <ol>
+                <li><strong>SQL 복사</strong>: 위의 "SQL 복사하기" 버튼 클릭</li>
+                <li><strong>Supabase 접속</strong>: "Supabase Dashboard 열기" 버튼 클릭</li>
+                <li><strong>SQL Editor 이동</strong>: 좌측 메뉴 → SQL Editor</li>
+                <li><strong>SQL 붙여넣기</strong>: 복사한 SQL 붙여넣기</li>
+                <li><strong>실행</strong>: RUN 버튼 클릭</li>
+                <li><strong>확인</strong>: "테이블 생성 확인" 버튼으로 검증</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function copySql() {
+            const sql = document.querySelector('pre').textContent;
+            navigator.clipboard.writeText(sql).then(() => {
+                alert('✅ SQL이 클립보드에 복사되었습니다!');
+            }).catch(err => {
+                alert('❌ 복사 실패: ' + err.message);
+            });
+        }
+
+        function openSupabase() {
+            window.open('https://supabase.com/dashboard', '_blank');
+        }
+
+        async function checkTable() {
+            const result = document.getElementById('result');
+            result.style.display = 'block';
+            result.className = '';
+            result.innerHTML = '<p>🔍 테이블 확인 중...</p>';
+
+            const SUPABASE_URL = 'https://qgpqhtuynxhmgawakjxe.supabase.co';
+            const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncHFodHV5bnhobWdhd2FranhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ0OTcwMDcsImV4cCI6MjA1MDA3MzAwN30.BM5w5eiIGN5eC1VwaTq3VRjmkDxGXlqTnXwbz3Bc4fk';
+
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+            try {
+                const { data, error } = await supabase
+                    .from('sales')
+                    .select('*')
+                    .limit(1);
+
+                if (error) {
+                    if (error.code === '42P01') {
+                        result.className = 'error';
+                        result.innerHTML = `
+                            <h3>❌ 테이블이 아직 생성되지 않았습니다</h3>
+                            <p>위의 SQL을 Supabase SQL Editor에서 실행하세요.</p>
+                        `;
+                    } else {
+                        throw error;
+                    }
+                } else {
+                    result.className = 'success';
+                    result.innerHTML = `
+                        <h3>✅ sales 테이블이 정상적으로 생성되었습니다!</h3>
+                        <p><strong>현재 매출 기록 수:</strong> ${data.length}개</p>
+                        <hr style="margin: 15px 0;">
+                        <h4>🎯 다음 단계:</h4>
+                        <ol>
+                            <li>개별 아파트 페이지 → 데이터 관리 → 매출 관리</li>
+                            <li>매출 기록 추가 버튼 클릭</li>
+                            <li>년도, 월, 매출액 입력 후 저장</li>
+                            <li>총괄 관리자 페이지에서 통계 확인</li>
+                        </ol>
+                    `;
+                }
+            } catch (error) {
+                result.className = 'error';
+                result.innerHTML = `
+                    <h3>❌ 오류 발생</h3>
+                    <p><strong>에러:</strong> ${error.message}</p>
+                    <p>Supabase SQL Editor에서 직접 SQL을 실행하세요.</p>
+                `;
+            }
+        }
+
+        // 페이지 로드 시 자동 확인
+        window.addEventListener('load', checkTable);
+    </script>
+</body>
+</html>

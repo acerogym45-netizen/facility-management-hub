@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>구매 물품 검수 - KINDWON</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; }
+    .photo-preview { max-width: 150px; max-height: 150px; object-fit: cover; }
+    .loading { display: none; }
+    .loading.active { display: block; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-green-600 to-emerald-600 text-white p-4 shadow-lg">
+    <div class="container mx-auto">
+      <h1 class="text-xl font-bold flex items-center">
+        <i class="fas fa-box-open mr-2"></i>
+        구매 물품 검수
+      </h1>
+    </div>
+  </header>
+
+  <!-- Loading -->
+  <div id="loading" class="loading active text-center p-8">
+    <i class="fas fa-spinner fa-spin text-4xl text-green-600"></i>
+    <p class="mt-4 text-gray-600">정보를 불러오는 중...</p>
+  </div>
+
+  <!-- Error -->
+  <div id="error" class="hidden p-4">
+    <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+      <div class="flex items-center">
+        <i class="fas fa-exclamation-triangle text-red-500 text-2xl mr-3"></i>
+        <div>
+          <h3 class="font-bold text-red-800">오류</h3>
+          <p id="error-message" class="text-red-700 text-sm"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main id="main-content" class="hidden container mx-auto p-4 max-w-2xl">
+    
+    <!-- Purchase Info -->
+    <div class="bg-white rounded-xl shadow-md p-6 mb-4">
+      <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+        <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+        구매 정보
+      </h2>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <span class="text-gray-600">요청자:</span>
+          <span id="requester" class="font-medium"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-600">요청일:</span>
+          <span id="request-date" class="font-medium"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-600">사유:</span>
+          <span id="reason" class="font-medium"></span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-600">예상 금액:</span>
+          <span id="estimated-amount" class="font-medium text-blue-600"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Items List -->
+    <div class="bg-white rounded-xl shadow-md p-6 mb-4">
+      <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+        <i class="fas fa-list text-green-600 mr-2"></i>
+        물품 목록
+      </h2>
+      <div id="items-list" class="space-y-2"></div>
+    </div>
+
+    <!-- Inspection Form -->
+    <div class="bg-white rounded-xl shadow-md p-6 mb-4">
+      <h2 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
+        <i class="fas fa-camera text-purple-600 mr-2"></i>
+        검수 정보
+      </h2>
+
+      <!-- Inspector Name -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          <i class="fas fa-user mr-1"></i>검수자 이름 *
+        </label>
+        <input type="text" id="inspector-name" 
+               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+               placeholder="이름 입력" required>
+      </div>
+
+      <!-- Actual Amount -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          <i class="fas fa-won-sign mr-1"></i>실제 금액 *
+        </label>
+        <input type="number" id="actual-amount" 
+               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+               placeholder="실제 지불 금액" required>
+      </div>
+
+      <!-- Photos -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          <i class="fas fa-images mr-1"></i>물품 사진 (최대 5장)
+        </label>
+        <input type="file" id="photo-input" accept="image/*" multiple 
+               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+               onchange="previewPhotos()">
+        <p class="text-xs text-gray-500 mt-1">물품, 영수증 등을 촬영해주세요</p>
+      </div>
+
+      <!-- Photo Preview -->
+      <div id="photo-preview" class="grid grid-cols-3 gap-2 mb-4"></div>
+
+      <!-- Notes -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          <i class="fas fa-comment mr-1"></i>메모 (선택)
+        </label>
+        <textarea id="notes" rows="3"
+                  class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                  placeholder="특이사항이 있으면 입력하세요"></textarea>
+      </div>
+
+      <!-- Submit Button -->
+      <button onclick="submitInspection()" 
+              class="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-lg font-medium shadow-md hover:from-green-600 hover:to-emerald-700 transition-all">
+        <i class="fas fa-check-circle mr-2"></i>검수 완료
+      </button>
+    </div>
+
+  </main>
+
+  <script>
+    const SUPABASE_URL = 'https://qgpqhtuynxhmgawakjxe.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncHFodHV5bnhobWdhd2FranhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ1OTE0MTQsImV4cCI6MjA1MDE2NzQxNH0.4k_L5R-JjCb0j1RX0t6bDHGb-TKMVJNbgPG8hKV62yU';
+    
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    let purchase = null;
+    let selectedPhotos = [];
+
+    // URL에서 QR 코드 파라미터 읽기
+    const urlParams = new URLSearchParams(window.location.search);
+    const qrCode = urlParams.get('qr');
+
+    // 페이지 로드 시 구매 정보 가져오기
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (!qrCode) {
+        showError('QR 코드가 유효하지 않습니다.');
+        return;
+      }
+
+      try {
+        // 구매 정보 조회
+        const { data, error } = await sb
+          .from('purchases')
+          .select(`
+            *,
+            purchase_items(*)
+          `)
+          .eq('inspection_qr', qrCode)
+          .eq('status', 'approved')
+          .single();
+
+        if (error) throw error;
+        if (!data) throw new Error('구매 정보를 찾을 수 없거나 이미 검수 완료되었습니다.');
+
+        purchase = data;
+        displayPurchaseInfo();
+        
+        document.getElementById('loading').classList.remove('active');
+        document.getElementById('main-content').classList.remove('hidden');
+      } catch (err) {
+        console.error(err);
+        showError(err.message || '구매 정보를 불러올 수 없습니다.');
+      }
+    });
+
+    function displayPurchaseInfo() {
+      document.getElementById('requester').textContent = purchase.requester_name;
+      document.getElementById('request-date').textContent = new Date(purchase.created_at).toLocaleDateString('ko-KR');
+      document.getElementById('reason').textContent = purchase.reason;
+      document.getElementById('estimated-amount').textContent = '₩' + purchase.total_amount.toLocaleString();
+
+      const itemsList = document.getElementById('items-list');
+      itemsList.innerHTML = purchase.purchase_items.map(item => `
+        <div class="flex justify-between items-center border-b pb-2">
+          <div>
+            <span class="font-medium">${item.item_name}</span>
+            <span class="text-sm text-gray-500 ml-2">${item.category}</span>
+          </div>
+          <div class="text-right">
+            <div class="text-sm">${item.quantity}개 × ₩${item.unit_price.toLocaleString()}</div>
+            <div class="font-medium text-green-600">₩${(item.quantity * item.unit_price).toLocaleString()}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function previewPhotos() {
+      const input = document.getElementById('photo-input');
+      const preview = document.getElementById('photo-preview');
+      
+      selectedPhotos = Array.from(input.files).slice(0, 5);
+      
+      preview.innerHTML = selectedPhotos.map((file, i) => {
+        const url = URL.createObjectURL(file);
+        return `
+          <div class="relative">
+            <img src="${url}" class="photo-preview rounded-lg border">
+            <button onclick="removePhoto(${i})" 
+                    class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">
+              ×
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function removePhoto(index) {
+      selectedPhotos.splice(index, 1);
+      const input = document.getElementById('photo-input');
+      const dt = new DataTransfer();
+      selectedPhotos.forEach(file => dt.items.add(file));
+      input.files = dt.files;
+      previewPhotos();
+    }
+
+    async function submitInspection() {
+      const inspectorName = document.getElementById('inspector-name').value.trim();
+      const actualAmount = parseFloat(document.getElementById('actual-amount').value);
+      const notes = document.getElementById('notes').value.trim();
+
+      if (!inspectorName) {
+        alert('검수자 이름을 입력하세요');
+        return;
+      }
+
+      if (!actualAmount || actualAmount <= 0) {
+        alert('실제 금액을 입력하세요');
+        return;
+      }
+
+      if (!confirm('검수를 완료하시겠습니까?\n완료 후에는 수정할 수 없습니다.')) {
+        return;
+      }
+
+      try {
+        document.getElementById('loading').classList.add('active');
+        document.getElementById('main-content').classList.add('hidden');
+
+        // 사진 업로드
+        const photoUrls = [];
+        for (const photo of selectedPhotos) {
+          const fileName = `${purchase.id}/${Date.now()}_${photo.name}`;
+          const { data, error } = await sb.storage
+            .from('purchase-photos')
+            .upload(fileName, photo);
+
+          if (error) throw error;
+
+          const { data: { publicUrl } } = sb.storage
+            .from('purchase-photos')
+            .getPublicUrl(fileName);
+
+          photoUrls.push(publicUrl);
+
+          // purchase_photos 테이블에 기록
+          await sb.from('purchase_photos').insert({
+            purchase_id: purchase.id,
+            photo_url: publicUrl,
+            uploaded_by: inspectorName
+          });
+        }
+
+        // 구매 요청 완료 처리
+        const { error: updateError } = await sb
+          .from('purchases')
+          .update({
+            status: 'completed',
+            actual_amount: actualAmount,
+            inspected_by: inspectorName,
+            inspected_at: new Date().toISOString(),
+            completion_time: new Date().toISOString()
+          })
+          .eq('id', purchase.id);
+
+        if (updateError) throw updateError;
+
+        // 성공 메시지
+        document.getElementById('loading').classList.remove('active');
+        document.body.innerHTML = `
+          <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-50 p-4">
+            <div class="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md">
+              <div class="text-6xl mb-4">✅</div>
+              <h2 class="text-2xl font-bold text-gray-800 mb-2">검수 완료!</h2>
+              <p class="text-gray-600 mb-4">물품 검수가 성공적으로 완료되었습니다.</p>
+              <div class="bg-green-50 p-4 rounded-lg text-left text-sm space-y-1">
+                <div><span class="text-gray-600">검수자:</span> <span class="font-medium">${inspectorName}</span></div>
+                <div><span class="text-gray-600">실제 금액:</span> <span class="font-medium text-green-600">₩${actualAmount.toLocaleString()}</span></div>
+                <div><span class="text-gray-600">사진:</span> <span class="font-medium">${photoUrls.length}장</span></div>
+              </div>
+            </div>
+          </div>
+        `;
+      } catch (err) {
+        console.error(err);
+        alert('검수 처리 중 오류가 발생했습니다: ' + err.message);
+        document.getElementById('loading').classList.remove('active');
+        document.getElementById('main-content').classList.remove('hidden');
+      }
+    }
+
+    function showError(message) {
+      document.getElementById('loading').classList.remove('active');
+      document.getElementById('error').classList.remove('hidden');
+      document.getElementById('error-message').textContent = message;
+    }
+  </script>
+
+</body>
+</html>

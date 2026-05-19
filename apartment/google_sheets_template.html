@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>구글 시트 정보 수집 템플릿</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-6xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">🏢 구글 시트 정보 수집 템플릿</h1>
+            <p class="text-gray-600 mb-4">각 아파트별 구글 시트 정보를 입력하고 다운로드하세요</p>
+            
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                <h3 class="font-bold text-blue-800 mb-2">📋 작성 가이드</h3>
+                <ul class="text-sm text-blue-700 space-y-1">
+                    <li>• <strong>구글 시트 ID</strong>: URL에서 /d/ 와 /edit 사이의 긴 문자열</li>
+                    <li>• <strong>시트 탭 이름</strong>: 구글 시트 하단의 탭 이름 (예: "월간 민원 처리 현황 DB")</li>
+                    <li>• <strong>상태</strong>: 드롭다운에서 선택 (기존 시트 / 새로 만듦 / 미정)</li>
+                    <li>• <strong>공유 권한</strong>: "링크가 있는 모든 사용자" 설정 여부</li>
+                </ul>
+            </div>
+
+            <button onclick="addRow()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded mb-4">
+                ➕ 아파트 추가
+            </button>
+            
+            <button onclick="downloadExcel()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mb-4 ml-2">
+                📥 엑셀 다운로드
+            </button>
+
+            <div class="overflow-x-auto">
+                <table id="dataTable" class="w-full border-collapse border border-gray-300">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="border border-gray-300 p-2 w-12">순번</th>
+                            <th class="border border-gray-300 p-2">아파트 이름</th>
+                            <th class="border border-gray-300 p-2">구글 시트 ID</th>
+                            <th class="border border-gray-300 p-2">시트 탭 이름</th>
+                            <th class="border border-gray-300 p-2">상태</th>
+                            <th class="border border-gray-300 p-2">공유 권한 설정</th>
+                            <th class="border border-gray-300 p-2">비고</th>
+                            <th class="border border-gray-300 p-2 w-20">삭제</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- 예시 행 -->
+                        <tr>
+                            <td class="border border-gray-300 p-2 text-center">1</td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="text" value="봉담자이프라이드시티" class="w-full p-1 border rounded" readonly style="background-color: #e8f5e9;">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="text" value="13MfjLeGmzX4NlyVkktb_GzY9Z1jgM16N-vcOHDcKFQ" class="w-full p-1 border rounded font-mono text-xs" readonly style="background-color: #e8f5e9;">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="text" value="네포이지더원" class="w-full p-1 border rounded" readonly style="background-color: #e8f5e9;">
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="w-full p-1 border rounded" disabled style="background-color: #e8f5e9;">
+                                    <option value="연동완료" selected>✅ 연동완료</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <select class="w-full p-1 border rounded" disabled style="background-color: #e8f5e9;">
+                                    <option value="설정완료" selected>✅ 설정완료</option>
+                                </select>
+                            </td>
+                            <td class="border border-gray-300 p-2">
+                                <input type="text" value="이미 연동됨" class="w-full p-1 border rounded text-sm" readonly style="background-color: #e8f5e9;">
+                            </td>
+                            <td class="border border-gray-300 p-2 text-center">-</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4">
+            <h3 class="font-bold text-yellow-800 mb-2">💡 팁</h3>
+            <ul class="text-sm text-yellow-700 space-y-1">
+                <li>• 구글 시트 URL 예시: <code class="bg-yellow-100 px-1">https://docs.google.com/spreadsheets/d/<strong>여기가_시트_ID</strong>/edit</code></li>
+                <li>• 모든 정보를 입력한 후 "📥 엑셀 다운로드" 버튼을 클릭하세요</li>
+                <li>• 다운로드한 파일을 제게 업로드해주시면 자동으로 시스템에 반영하겠습니다!</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let rowCount = 1;
+
+        function addRow() {
+            rowCount++;
+            const tbody = document.getElementById('tableBody');
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td class="border border-gray-300 p-2 text-center">${rowCount}</td>
+                <td class="border border-gray-300 p-2">
+                    <input type="text" placeholder="예: 볼당자이프라자센터" class="w-full p-1 border rounded apartment-name">
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <input type="text" placeholder="구글 시트 ID 입력" class="w-full p-1 border rounded font-mono text-xs sheet-id">
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <input type="text" value="월간 민원 처리 현황 DB" class="w-full p-1 border rounded sheet-tab">
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="w-full p-1 border rounded sheet-status">
+                        <option value="">선택하세요</option>
+                        <option value="기존 시트">기존 시트 사용</option>
+                        <option value="새로 만듦">새로 만듦</option>
+                        <option value="미정">미정</option>
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <select class="w-full p-1 border rounded share-permission">
+                        <option value="">선택하세요</option>
+                        <option value="설정완료">✅ 설정완료</option>
+                        <option value="미설정">❌ 미설정</option>
+                        <option value="확인필요">⚠️ 확인필요</option>
+                    </select>
+                </td>
+                <td class="border border-gray-300 p-2">
+                    <input type="text" placeholder="메모 (선택사항)" class="w-full p-1 border rounded text-sm notes">
+                </td>
+                <td class="border border-gray-300 p-2 text-center">
+                    <button onclick="deleteRow(this)" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-sm">
+                        🗑️
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(newRow);
+        }
+
+        function deleteRow(button) {
+            if (confirm('이 행을 삭제하시겠습니까?')) {
+                button.closest('tr').remove();
+                updateRowNumbers();
+            }
+        }
+
+        function updateRowNumbers() {
+            const rows = document.querySelectorAll('#tableBody tr');
+            rows.forEach((row, index) => {
+                row.querySelector('td:first-child').textContent = index + 1;
+            });
+            rowCount = rows.length;
+        }
+
+        function downloadExcel() {
+            const table = document.getElementById('dataTable');
+            const rows = Array.from(table.querySelectorAll('tbody tr'));
+            
+            const data = rows.map((row, index) => {
+                const cells = row.querySelectorAll('td');
+                return {
+                    '순번': index + 1,
+                    '아파트 이름': row.querySelector('.apartment-name')?.value || cells[1].querySelector('input').value,
+                    '구글 시트 ID': row.querySelector('.sheet-id')?.value || cells[2].querySelector('input').value,
+                    '시트 탭 이름': row.querySelector('.sheet-tab')?.value || cells[3].querySelector('input').value,
+                    '상태': row.querySelector('.sheet-status')?.value || cells[4].querySelector('select').value,
+                    '공유 권한 설정': row.querySelector('.share-permission')?.value || cells[5].querySelector('select').value,
+                    '비고': row.querySelector('.notes')?.value || cells[6].querySelector('input').value
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(data);
+            
+            // 열 너비 설정
+            ws['!cols'] = [
+                { wch: 8 },   // 순번
+                { wch: 25 },  // 아파트 이름
+                { wch: 50 },  // 구글 시트 ID
+                { wch: 25 },  // 시트 탭 이름
+                { wch: 15 },  // 상태
+                { wch: 15 },  // 공유 권한
+                { wch: 30 }   // 비고
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "구글시트정보");
+            
+            const fileName = `구글시트_연동_정보_${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            
+            alert('✅ 엑셀 파일이 다운로드되었습니다!\n파일을 채워서 업로드해주세요.');
+        }
+    </script>
+</body>
+</html>

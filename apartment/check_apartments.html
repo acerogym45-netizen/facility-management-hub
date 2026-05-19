@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>아파트 구글 시트 확인</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>아파트 구글 시트 정보 확인 중...</h1>
+    <pre id="output"></pre>
+    
+    <script>
+        const SUPABASE_URL = 'https://qgpqhtuynxhmgawakjxe.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncHFodHV5bnhobWdhd2FranhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyOTQyNTEsImV4cCI6MjA4Mjg3MDI1MX0.WNljQIKDbeZCDlXe8fpBdZs58XRFfujGt7lBGfq_pVg';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        async function checkApartments() {
+            try {
+                const { data, error } = await supabase
+                    .from('apartments')
+                    .select('id, name, google_sheet_id, google_sheet_name')
+                    .order('name');
+                
+                if (error) throw error;
+                
+                console.log('Apartments data:', data);
+                
+                let output = '===== 아파트별 구글 시트 정보 =====\n\n';
+                output += `총 ${data.length}개 아파트\n\n`;
+                
+                data.forEach((apt, index) => {
+                    output += `${index + 1}. ${apt.name}\n`;
+                    output += `   - ID: ${apt.id}\n`;
+                    output += `   - 구글 시트 ID: ${apt.google_sheet_id || '❌ 없음'}\n`;
+                    output += `   - 시트 탭 이름: ${apt.google_sheet_name || '❌ 없음'}\n`;
+                    output += `   - 상태: ${apt.google_sheet_id ? '✅ 설정됨' : '⚠️ 미설정'}\n\n`;
+                });
+                
+                document.getElementById('output').textContent = output;
+            } catch (error) {
+                document.getElementById('output').textContent = 'Error: ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+        
+        checkApartments();
+    </script>
+</body>
+</html>

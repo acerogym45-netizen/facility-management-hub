@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>아파트 추가</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>아파트 추가 중...</h1>
+    <div id="result"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://ezyjulsdodriyxuaohmz.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6eWp1bHNkb2RyaXl4dWFvaG16Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU3MjE5NTYsImV4cCI6MjA1MTI5Nzk1Nn0.IzGLnExj7NeZFnGOGjzN7y0RFhPE4VWhxfb5fhqPR4k';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function addApartments() {
+            const apartments = [
+                { name: 'e편한세상탕정퍼스트드림' },
+                { name: '내포이지더원' },
+                { name: '상도푸르지오클라베뉴' },
+                { name: '파주디에트르에듀타운' },
+                { name: '파주호반써밋웨스트파크' },
+                { name: '헤링턴플레이스안성공도' },
+                { name: '초월역힐스테이트' }
+            ];
+
+            const { data, error } = await supabase
+                .from('apartments')
+                .insert(apartments)
+                .select();
+
+            if (error) {
+                document.getElementById('result').innerHTML = '❌ 오류 발생: ' + error.message;
+                console.error('Error:', error);
+            } else {
+                document.getElementById('result').innerHTML = '✅ 성공! ' + data.length + '개 아파트가 추가되었습니다.<br><br>' + 
+                    data.map(apt => `- ${apt.name} (ID: ${apt.id})`).join('<br>');
+                console.log('Success:', data);
+            }
+        }
+
+        addApartments();
+    </script>
+</body>
+</html>

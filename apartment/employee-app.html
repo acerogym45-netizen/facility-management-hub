@@ -1,0 +1,4501 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#3B82F6">
+  
+  <title>BDXI 직원 앱</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <style>
+    /* 커스텀 애니메이션 */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    .animate-pulse-slow {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    
+    /* PWA 설치 배너 */
+    .install-prompt {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1rem;
+      box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+      z-index: 9999;
+      transform: translateY(100%);
+      transition: transform 0.3s ease-out;
+    }
+    
+    .install-prompt.show {
+      transform: translateY(0);
+    }
+    
+    /* GPS 상태 표시 */
+    .gps-indicator {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      z-index: 1000;
+    }
+    
+    .gps-indicator.active {
+      background-color: #10b981;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 1);
+      animation: pulse 2s infinite;
+    }
+    
+    .gps-indicator.inactive {
+      background-color: #ef4444;
+    }
+    
+    /* 터치 피드백 */
+    .btn-touch {
+      transition: transform 0.1s ease;
+    }
+    
+    .btn-touch:active {
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  
+  <!-- GPS 상태 표시 -->
+  <div id="gps-indicator" class="gps-indicator inactive" title="GPS 상태"></div>
+  
+  <!-- PWA 설치 안내 배너 -->
+  <div id="install-prompt" class="install-prompt">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-download text-2xl"></i>
+        <div>
+          <div class="font-bold">앱으로 설치하기</div>
+          <div class="text-sm opacity-90">홈 화면에 추가하면 더 편리하게 사용할 수 있습니다</div>
+        </div>
+      </div>
+      <button id="install-btn" class="bg-white text-purple-600 px-4 py-2 rounded-lg font-bold">
+        설치
+      </button>
+      <button id="install-close" class="ml-2 text-white opacity-75">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+  
+  <!-- 로딩 화면 -->
+  <div id="loading-screen" class="fixed inset-0 bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center z-50">
+    <div class="text-center text-white">
+      <div class="animate-pulse-slow mb-4">
+        <i class="fas fa-qrcode text-6xl"></i>
+      </div>
+      <div class="text-2xl font-bold mb-2">BDXI 직원 앱</div>
+      <div class="text-sm opacity-90">로딩 중...</div>
+    </div>
+  </div>
+  
+  <!-- 메인 컨테이너 -->
+  <div id="main-container" class="hidden pb-20">
+    
+    <!-- 헤더 -->
+    <header class="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 shadow-lg">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm opacity-90" id="header-location">위치 확인 중...</div>
+          <div class="text-xl font-bold" id="header-name">환영합니다</div>
+          <div class="text-sm" id="header-role">직원</div>
+        </div>
+        <div class="flex gap-2">
+          <button id="btn-change-password" class="bg-white/20 hover:bg-white/30 px-3 py-2 rounded-lg transition" title="비밀번호 변경">
+            <i class="fas fa-key"></i>
+          </button>
+          <button id="btn-logout" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition">
+            <i class="fas fa-sign-out-alt mr-2"></i>로그아웃
+          </button>
+        </div>
+      </div>
+    </header>
+    
+    <!-- 탭 네비게이션 -->
+    <div class="bg-white shadow-md sticky top-0 z-40">
+      <div class="flex">
+        <button class="tab-btn flex-1 py-3 font-bold border-b-2 border-blue-500 text-blue-500 text-sm" data-tab="attendance">
+          <i class="fas fa-clock mr-1"></i>근태
+        </button>
+        <button class="tab-btn flex-1 py-3 font-bold border-b-2 border-transparent text-gray-500 text-sm" data-tab="work">
+          <i class="fas fa-camera mr-1"></i>업무
+        </button>
+        <button class="tab-btn flex-1 py-3 font-bold border-b-2 border-transparent text-gray-500 text-sm" data-tab="purchase">
+          <i class="fas fa-shopping-cart mr-1"></i>구매
+        </button>
+        <button class="tab-btn flex-1 py-3 font-bold border-b-2 border-transparent text-gray-500 text-sm" data-tab="payroll">
+          <i class="fas fa-file-invoice-dollar mr-1"></i>급여
+        </button>
+      </div>
+    </div>
+    
+    <!-- 탭 콘텐츠 -->
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+      
+      <!-- 근태 탭 -->
+      <div id="tab-attendance" class="tab-content">
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6 animate-fade-in">
+          <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-map-marker-alt text-blue-500 mr-2"></i>
+            현재 위치
+          </h2>
+          <div id="location-info" class="text-gray-600">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fas fa-spinner fa-spin text-blue-500"></i>
+              GPS 위치 확인 중...
+            </div>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <button id="btn-checkin" class="btn-touch bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-sign-in-alt text-3xl mb-2"></i>
+            <div class="font-bold text-lg">출근</div>
+          </button>
+          <button id="btn-checkout" class="btn-touch bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-sign-out-alt text-3xl mb-2"></i>
+            <div class="font-bold text-lg">퇴근</div>
+          </button>
+          <button id="btn-break-start" class="btn-touch bg-gradient-to-br from-blue-500 to-cyan-600 text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-coffee text-3xl mb-2"></i>
+            <div class="font-bold text-lg">휴게 시작</div>
+          </button>
+          <button id="btn-break-end" class="btn-touch bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-play text-3xl mb-2"></i>
+            <div class="font-bold text-lg">휴게 종료</div>
+          </button>
+        </div>
+        
+        <!-- 🆕 휴가 신청 버튼 -->
+        <div class="mb-6">
+          <button id="btn-vacation" class="btn-touch w-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-xl p-4 shadow-lg hover:shadow-xl transition flex items-center justify-center gap-3">
+            <i class="fas fa-umbrella-beach text-2xl"></i>
+            <div>
+              <div class="font-bold text-lg">휴가 신청</div>
+              <div class="text-xs opacity-90">휴가 신청 및 조회</div>
+            </div>
+            <span id="vacation-pending-badge" class="ml-auto bg-white text-indigo-600 px-3 py-1 rounded-full text-sm font-bold hidden">0</span>
+          </button>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in">
+          <h3 class="font-bold mb-4 flex items-center justify-between">
+            <span><i class="fas fa-history text-blue-500 mr-2"></i>오늘의 기록</span>
+            <div class="flex gap-2">
+              <button id="btn-open-calendar" class="text-sm text-purple-500 hover:text-purple-700 px-3 py-1 rounded-lg hover:bg-purple-50 transition">
+                <i class="fas fa-calendar-alt mr-1"></i>캘린더
+              </button>
+              <button id="btn-refresh-attendance" class="text-sm text-blue-500 hover:text-blue-700 px-3 py-1 rounded-lg hover:bg-blue-50 transition">
+                <i class="fas fa-sync-alt mr-1"></i>새로고침
+              </button>
+            </div>
+          </h3>
+          <div id="today-attendance" class="space-y-3">
+            <div class="text-center text-gray-400 py-8">
+              <i class="fas fa-clipboard-list text-4xl mb-2"></i>
+              <div>기록이 없습니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 업무 사진 탭 -->
+      <div id="tab-work" class="tab-content hidden">
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6 animate-fade-in">
+          <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-camera text-blue-500 mr-2"></i>
+            업무 사진 촬영
+          </h2>
+          
+          <div class="mb-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="before-after-toggle" class="w-5 h-5">
+              <span class="font-semibold">Before/After 모드</span>
+            </label>
+          </div>
+          
+          <div id="single-photo-mode" class="space-y-4">
+            <button id="btn-take-photo" class="btn-touch w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition">
+              <i class="fas fa-camera text-2xl mr-2"></i>사진 촬영 (단일)
+            </button>
+            <button id="btn-select-photo" class="btn-touch w-full bg-white border-2 border-blue-500 text-blue-500 py-4 rounded-xl font-bold hover:bg-blue-50 transition">
+              <i class="fas fa-images text-2xl mr-2"></i>갤러리에서 선택 (최대 30장)
+            </button>
+            <input type="file" id="file-photo" accept="image/*" capture="environment" class="hidden">
+            <input type="file" id="file-gallery" accept="image/*" multiple class="hidden">
+            
+            <!-- 선택된 사진 미리보기 -->
+            <div id="photo-preview-container" class="hidden">
+              <div class="flex items-center justify-between mb-3">
+                <span class="font-bold text-gray-700">선택한 사진 <span id="photo-count" class="text-blue-600">0</span>장</span>
+                <button id="btn-clear-photos" class="text-sm text-red-500 hover:text-red-700">
+                  <i class="fas fa-times mr-1"></i>전체 삭제
+                </button>
+              </div>
+              <div id="photo-preview-grid" class="grid grid-cols-3 gap-2 mb-4"></div>
+              
+              <!-- 메모 입력 -->
+              <div class="mb-3">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">작업 메모 (선택사항)</label>
+                <textarea id="inp-notes-single" rows="2" placeholder="예: 복도 청소 완료" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+              </div>
+              
+              <!-- 업로드 버튼 -->
+              <button id="btn-upload-photos" class="btn-touch w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition">
+                <span id="btn-upload-text"><i class="fas fa-cloud-upload-alt text-2xl mr-2"></i>업로드</span>
+                <i id="spinner-upload" class="fas fa-spinner fa-spin ml-2 hidden"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div id="before-after-mode" class="hidden space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div class="border-2 border-dashed border-blue-300 rounded-xl p-4 text-center">
+                <div class="text-blue-500 font-bold mb-2">Before</div>
+                <div id="before-photo-preview" class="hidden bg-gray-100 rounded-lg aspect-square overflow-hidden mb-2">
+                  <img id="before-photo-img" class="w-full h-full object-cover">
+                </div>
+                <div id="before-photo-placeholder" class="bg-gray-100 rounded-lg aspect-square flex items-center justify-center mb-2">
+                  <i class="fas fa-image text-4xl text-gray-300"></i>
+                </div>
+                <button id="btn-before-photo" class="btn-touch w-full bg-blue-500 text-white py-2 rounded-lg text-sm">
+                  <i class="fas fa-camera mr-1"></i>촬영
+                </button>
+              </div>
+              <div class="border-2 border-dashed border-green-300 rounded-xl p-4 text-center">
+                <div class="text-green-500 font-bold mb-2">After</div>
+                <div id="after-photo-preview" class="hidden bg-gray-100 rounded-lg aspect-square overflow-hidden mb-2">
+                  <img id="after-photo-img" class="w-full h-full object-cover">
+                </div>
+                <div id="after-photo-placeholder" class="bg-gray-100 rounded-lg aspect-square flex items-center justify-center mb-2">
+                  <i class="fas fa-image text-4xl text-gray-300"></i>
+                </div>
+                <button id="btn-after-photo" class="btn-touch w-full bg-green-500 text-white py-2 rounded-lg text-sm">
+                  <i class="fas fa-camera mr-1"></i>촬영
+                </button>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="block text-sm font-semibold text-gray-700 mb-2">작업 메모 (선택사항)</label>
+              <input type="text" id="inp-notes-before-after" placeholder="예: 외부 청소 작업" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <button id="btn-submit-before-after" class="btn-touch w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              <span id="btn-before-after-text"><i class="fas fa-check mr-2"></i>2장 모두 업로드</span>
+              <i id="spinner-before-after" class="fas fa-spinner fa-spin ml-2 hidden"></i>
+            </button>
+          </div>
+          
+          <!-- Hidden file inputs for Before/After mode -->
+          <input type="file" id="inp-before-capture" accept="image/*" capture="environment" class="hidden">
+          <input type="file" id="inp-after-capture" accept="image/*" capture="environment" class="hidden">
+          
+          <div id="photo-preview-container" class="hidden mt-4">
+            <div class="font-bold mb-2">선택한 사진</div>
+            <div id="photo-preview-grid" class="grid grid-cols-3 gap-2"></div>
+            <button id="btn-upload-photos" class="btn-touch w-full mt-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition">
+              <i class="fas fa-cloud-upload-alt text-2xl mr-2"></i>업로드
+            </button>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in">
+          <h3 class="font-bold mb-4 flex items-center justify-between">
+            <span><i class="fas fa-images text-blue-500 mr-2"></i>오늘의 사진</span>
+            <button id="btn-refresh-photos" class="text-sm text-blue-500 hover:text-blue-700">
+              <i class="fas fa-sync-alt mr-1"></i>새로고침
+            </button>
+          </h3>
+          <div id="today-photos" class="grid grid-cols-3 gap-2">
+            <div class="col-span-3 text-center text-gray-400 py-8">
+              <i class="fas fa-images text-4xl mb-2"></i>
+              <div>사진이 없습니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 구매 요청 탭 -->
+      <div id="tab-purchase" class="tab-content hidden">
+        <div class="flex gap-3 mb-6">
+          <button id="btn-new-purchase" class="btn-touch flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-plus-circle text-2xl mr-2"></i>새 구매 요청
+          </button>
+          <button id="btn-my-purchases" class="btn-touch flex-1 bg-white border-2 border-blue-500 text-blue-500 py-4 rounded-xl font-bold hover:bg-blue-50 transition relative">
+            <i class="fas fa-list text-2xl mr-2"></i>내 요청 목록
+            <span id="purchase-badge" class="hidden absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">0</span>
+          </button>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in">
+          <h3 class="font-bold mb-4 flex items-center">
+            <i class="fas fa-clock text-orange-500 mr-2"></i>검수 대기 중
+          </h3>
+          <div id="pending-inspections" class="space-y-3">
+            <div class="text-center text-gray-400 py-8">
+              <i class="fas fa-clipboard-check text-4xl mb-2"></i>
+              <div>검수 대기 항목이 없습니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 💰 급여 탭 -->
+      <div id="tab-payroll" class="tab-content hidden">
+        <!-- 통계 카드 -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-4 shadow-lg">
+            <div class="text-xs opacity-90 mb-1">전체 명세서</div>
+            <div class="text-2xl font-bold" id="payroll-total-count">0</div>
+          </div>
+          <div class="bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-xl p-4 shadow-lg">
+            <div class="text-xs opacity-90 mb-1">미확인</div>
+            <div class="text-2xl font-bold" id="payroll-pending-count">0</div>
+          </div>
+          <div class="bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-xl p-4 shadow-lg">
+            <div class="text-xs opacity-90 mb-1">확인 완료</div>
+            <div class="text-2xl font-bold" id="payroll-viewed-count">0</div>
+          </div>
+          <div class="bg-gradient-to-br from-purple-500 to-indigo-600 text-white rounded-xl p-4 shadow-lg">
+            <div class="text-xs opacity-90 mb-1">최근 명세서</div>
+            <div class="text-sm font-bold" id="payroll-latest-month">-</div>
+          </div>
+        </div>
+
+        <!-- 필터 -->
+        <div class="bg-white rounded-xl shadow-md p-4 mb-6">
+          <div class="flex gap-3 flex-wrap">
+            <select id="payroll-filter-year" class="flex-1 min-w-[120px] px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none">
+              <option value="">전체 년도</option>
+              <option value="2026">2026년</option>
+              <option value="2025">2025년</option>
+              <option value="2024">2024년</option>
+            </select>
+            <select id="payroll-filter-status" class="flex-1 min-w-[120px] px-3 py-2 border-2 border-gray-200 rounded-lg focus:border-purple-500 focus:outline-none">
+              <option value="">전체 상태</option>
+              <option value="pending">미확인</option>
+              <option value="viewed">확인함</option>
+              <option value="downloaded">다운로드함</option>
+            </select>
+            <button onclick="app.loadPayrollList()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+              <i class="fas fa-sync-alt mr-2"></i>새로고침
+            </button>
+          </div>
+        </div>
+
+        <!-- 급여명세서 목록 -->
+        <div class="bg-white rounded-xl shadow-md p-6">
+          <h3 class="font-bold mb-4 flex items-center">
+            <i class="fas fa-file-invoice-dollar text-purple-600 mr-2"></i>급여명세서 목록
+          </h3>
+          
+          <div id="payroll-list" class="space-y-4">
+            <!-- 로딩 -->
+            <div class="text-center py-10">
+              <i class="fas fa-spinner fa-spin text-2xl text-purple-600 mb-2"></i>
+              <p class="text-gray-600">급여명세서를 불러오는 중...</p>
+            </div>
+          </div>
+
+          <!-- 빈 상태 -->
+          <div id="payroll-empty-state" class="hidden text-center py-10">
+            <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
+            <p class="text-lg text-gray-500 mb-2">등록된 급여명세서가 없습니다</p>
+            <p class="text-sm text-gray-400">명세서가 등록되면 여기에 표시됩니다</p>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+    
+  </div>
+  
+  <!-- Toast 알림 -->
+  <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg z-[100] hidden transition-all">
+    <div class="flex items-center gap-2">
+      <i id="toast-icon" class="fas fa-info-circle"></i>
+      <span id="toast-message">알림</span>
+    </div>
+  </div>
+  
+  <!-- 모달들 -->
+  
+  <!-- 출퇴근 캘린더 모달 -->
+  <div id="calendar-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-purple-500 to-indigo-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-calendar-alt"></i>
+          출퇴근 캘린더
+        </h3>
+        <button onclick="app.closeCalendar()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- 월 선택 -->
+      <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-b flex items-center justify-between">
+        <button onclick="app.prevMonth()" class="p-2 hover:bg-white rounded-lg transition">
+          <i class="fas fa-chevron-left text-purple-600"></i>
+        </button>
+        <div class="text-lg font-bold text-gray-800" id="calendar-month-title">2026년 5월</div>
+        <button onclick="app.nextMonth()" class="p-2 hover:bg-white rounded-lg transition">
+          <i class="fas fa-chevron-right text-purple-600"></i>
+        </button>
+      </div>
+
+      <!-- 월간 통계 -->
+      <div class="p-4 bg-gray-50 border-b grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-blue-600" id="stat-work-days">0</div>
+          <div class="text-xs text-gray-600 mt-1">근무일</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-green-600" id="stat-total-hours">0h</div>
+          <div class="text-xs text-gray-600 mt-1">총 근무시간</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-purple-600" id="stat-avg-hours">0h</div>
+          <div class="text-xs text-gray-600 mt-1">평균 근무시간</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-orange-600" id="stat-break-hours">0h</div>
+          <div class="text-xs text-gray-600 mt-1">총 휴게시간</div>
+        </div>
+      </div>
+
+      <!-- 캘린더 -->
+      <div class="p-4 md:p-6 overflow-y-auto" style="max-height: 60vh;">
+        <!-- 요일 헤더 -->
+        <div class="grid grid-cols-7 gap-1 md:gap-2 mb-2">
+          <div class="text-center text-sm font-bold text-red-500 py-2">일</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">월</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">화</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">수</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">목</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">금</div>
+          <div class="text-center text-sm font-bold text-blue-500 py-2">토</div>
+        </div>
+        
+        <!-- 날짜 그리드 -->
+        <div id="calendar-grid" class="grid grid-cols-7 gap-1 md:gap-2">
+          <!-- Dynamic calendar cells will be inserted here -->
+        </div>
+      </div>
+
+      <!-- 범례 -->
+      <div class="p-4 bg-gray-50 border-t flex flex-wrap gap-4 justify-center text-sm">
+        <div class="flex items-center gap-2">
+          <div class="w-4 h-4 rounded bg-green-500"></div>
+          <span class="text-gray-600">정상 출퇴근</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-4 h-4 rounded bg-orange-500"></div>
+          <span class="text-gray-600">출근만</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-4 h-4 rounded bg-gray-300"></div>
+          <span class="text-gray-600">기록 없음</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-4 h-4 rounded border-2 border-blue-500"></div>
+          <span class="text-gray-600">오늘</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 사진 뷰어 모달 -->
+  <div id="photo-viewer-modal" class="hidden fixed inset-0 bg-black z-[100] flex flex-col">
+    <!-- 헤더 -->
+    <div class="flex items-center justify-between p-4 md:p-6 bg-gradient-to-b from-black/80 to-transparent z-10">
+      <div class="text-white">
+        <div class="font-bold text-lg md:text-xl" id="viewer-photo-count">1 / 1</div>
+        <div class="text-sm md:text-base text-gray-300" id="viewer-photo-time"></div>
+      </div>
+      <button onclick="app.closePhotoViewer()" class="text-white hover:bg-white/20 w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition">
+        <i class="fas fa-times text-2xl md:text-3xl"></i>
+      </button>
+    </div>
+    
+    <!-- 메인 사진 (3/4 높이) -->
+    <div class="flex-1 flex items-center justify-center relative" style="min-height: 0; height: 75%;">
+      <img id="viewer-main-image" class="max-w-full max-h-full object-contain">
+      
+      <!-- 좌우 버튼 -->
+      <button onclick="app.viewerPrevPhoto()" class="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center transition">
+        <i class="fas fa-chevron-left text-lg md:text-2xl"></i>
+      </button>
+      <button onclick="app.viewerNextPhoto()" class="absolute right-2 md:right-6 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center transition">
+        <i class="fas fa-chevron-right text-lg md:text-2xl"></i>
+      </button>
+    </div>
+    
+    <!-- 썸네일 영역 (1/4 높이) -->
+    <div class="bg-gradient-to-t from-black/90 to-transparent" style="height: 25%;">
+      <div class="h-full overflow-x-auto overflow-y-hidden px-2 md:px-6 py-2 md:py-4">
+        <div id="viewer-thumbnails" class="flex gap-2 md:gap-3 h-full items-center">
+          <!-- Dynamic thumbnails will be inserted here -->
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 🆕 휴가 신청 모달 -->
+  <div id="vacation-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-indigo-500 to-purple-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-umbrella-beach"></i>
+          휴가 관리
+        </h3>
+        <button onclick="app.closeVacationModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <!-- 휴가 신청 폼 -->
+      <div class="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-b">
+        <div class="bg-white rounded-xl p-6 shadow-sm">
+          <h4 class="font-bold text-lg mb-4 flex items-center gap-2">
+            <i class="fas fa-calendar-plus text-indigo-600"></i>
+            새 휴가 신청
+          </h4>
+          
+          <div class="space-y-4">
+            <!-- 휴가 종류 -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">휴가 종류</label>
+              <select id="vacation-type" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <option value="annual">연차</option>
+                <option value="half_day">반차</option>
+                <option value="sick">병가</option>
+                <option value="personal">개인 사유</option>
+                <option value="other">기타</option>
+              </select>
+            </div>
+            
+            <!-- 기간 -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">시작일</label>
+                <input type="date" id="vacation-start-date" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">종료일</label>
+                <input type="date" id="vacation-end-date" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+              </div>
+            </div>
+            
+            <!-- 사유 -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">사유</label>
+              <textarea id="vacation-reason" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="휴가 사유를 입력하세요"></textarea>
+            </div>
+            
+            <!-- 신청 버튼 -->
+            <button onclick="app.submitVacation()" class="w-full px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 transition-all shadow-md font-bold">
+              <i class="fas fa-paper-plane mr-2"></i>
+              휴가 신청
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 휴가 목록 -->
+      <div class="p-6">
+        <h4 class="font-bold text-lg mb-4 flex items-center gap-2">
+          <i class="fas fa-list text-purple-600"></i>
+          신청 내역
+        </h4>
+        
+        <div id="vacation-list" class="space-y-3 max-h-[40vh] overflow-y-auto">
+          <div class="text-center py-8 text-gray-500">
+            <i class="fas fa-calendar-times text-4xl mb-2 opacity-50"></i>
+            <p>신청 내역이 없습니다</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 내 구매 요청 모달 -->
+  <div id="purchase-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-indigo-500 to-purple-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-shopping-cart"></i>
+          내 구매 요청
+        </h3>
+        <button onclick="app.closePurchaseModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- 새 구매 요청 버튼 -->
+      <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+        <button onclick="app.openNewPurchaseRequest()" class="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md font-bold flex items-center justify-center gap-2">
+          <i class="fas fa-plus-circle text-xl"></i>
+          새 구매 요청
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b bg-gray-50">
+        <button onclick="app.switchPurchaseTab('pending')" id="tab-pending" class="flex-1 px-4 py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-indigo-600 transition-colors">
+          <i class="fas fa-clock mr-1"></i>검수 대기 <span id="count-pending" class="ml-1 px-2 py-0.5 text-xs font-bold bg-orange-100 text-orange-600 rounded-full">0</span>
+        </button>
+        <button onclick="app.switchPurchaseTab('all')" id="tab-all" class="flex-1 px-4 py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-indigo-600 transition-colors">
+          <i class="fas fa-list mr-1"></i>전체 목록 <span id="count-all" class="ml-1 px-2 py-0.5 text-xs font-bold bg-gray-200 text-gray-600 rounded-full">0</span>
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div id="purchase-list" class="p-6 overflow-y-auto" style="max-height: 60vh;">
+        <div id="loading-purchases" class="text-center py-8">
+          <i class="fas fa-spinner fa-spin text-4xl text-indigo-600"></i>
+          <p class="mt-4 text-gray-600">불러오는 중...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 물품 검수 모달 -->
+  <div id="inspection-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-green-500 to-emerald-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-camera"></i>
+          물품 검수
+        </h3>
+        <button onclick="app.closeInspectionModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Purchase Info -->
+      <div class="p-6 border-b bg-gray-50">
+        <h4 class="text-sm font-bold text-gray-700 mb-3">구매 정보</h4>
+        <div id="inspection-purchase-info" class="space-y-2 text-sm">
+          <!-- Dynamic content -->
+        </div>
+      </div>
+
+      <!-- Inspection Form -->
+      <div class="p-6 space-y-4 overflow-y-auto" style="max-height: 50vh;">
+        <!-- 물품 목록 표시 -->
+        <div id="inspection-items-list" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <h4 class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+            <i class="fas fa-list text-blue-600"></i>
+            구매 물품 목록
+          </h4>
+          <div id="inspection-items-content" class="space-y-2">
+            <!-- 동적으로 물품 목록이 표시됩니다 -->
+          </div>
+        </div>
+
+        <!-- Photos -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-images mr-1 text-green-600"></i>물품 사진 (최대 10장) *
+          </label>
+          <input type="file" id="inspection-photos" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" multiple class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+          <p class="text-xs text-gray-500 mt-1">
+            <i class="fas fa-info-circle mr-1"></i>최대 10장, 각 5MB 이하 (JPG, PNG, GIF, WEBP)
+          </p>
+          
+          <!-- 사진 미리보기 -->
+          <div id="inspection-photo-preview" class="grid grid-cols-3 gap-2 mt-3 hidden"></div>
+          
+          <!-- 사진별 물품 선택 및 메모 -->
+          <div id="inspection-photo-notes" class="hidden space-y-3 mt-4">
+            <!-- 동적으로 생성됩니다 -->
+          </div>
+        </div>
+
+        <!-- Actual Amount -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-won-sign mr-1 text-green-600"></i>실제 금액 *
+          </label>
+          <input type="number" id="inspection-actual-amount" placeholder="실제 지불 금액 입력" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+        </div>
+
+        <!-- Notes -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-comment mr-1 text-green-600"></i>메모 (선택)
+          </label>
+          <textarea id="inspection-notes" rows="3" placeholder="특이사항이 있으면 입력하세요" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"></textarea>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 p-6 border-t bg-gray-50">
+        <button onclick="app.closeInspectionModal()" class="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium">
+          취소
+        </button>
+        <button onclick="app.submitInspection()" class="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-md font-medium">
+          <i class="fas fa-check-circle mr-2"></i>검수 완료
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 구매 요청 상세 정보 모달 -->
+  <div id="purchase-detail-modal" class="hidden fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-purple-500 to-indigo-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-info-circle"></i>
+          구매 요청 상세
+        </h3>
+        <button onclick="app.closePurchaseDetailModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div class="p-6 overflow-y-auto" style="max-height: 70vh;" id="purchase-detail-content">
+        <!-- 동적 콘텐츠 -->
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 p-6 border-t bg-gray-50">
+        <button onclick="app.closePurchaseDetailModal()" class="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 비밀번호 변경 모달 -->
+  <div id="password-change-modal" class="hidden fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-orange-500 to-red-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-key"></i>
+          비밀번호 변경
+        </h3>
+        <button onclick="app.closePasswordModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-lock mr-1 text-orange-600"></i>현재 비밀번호
+          </label>
+          <input type="password" id="current-password-input" placeholder="현재 비밀번호를 입력하세요" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none transition-colors">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-key mr-1 text-orange-600"></i>새 비밀번호
+          </label>
+          <input type="password" id="new-password-input" placeholder="새 비밀번호를 입력하세요 (최소 4자)" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none transition-colors">
+          <p class="text-xs text-gray-500 mt-1">최소 4자리 이상 입력하세요</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-check-circle mr-1 text-orange-600"></i>비밀번호 확인
+          </label>
+          <input type="password" id="confirm-password-input" placeholder="새 비밀번호를 다시 입력하세요" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:outline-none transition-colors">
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 p-6 border-t bg-gray-50">
+        <button onclick="app.closePasswordModal()" class="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium">
+          취소
+        </button>
+        <button onclick="app.submitPasswordChange()" class="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all shadow-md font-medium">
+          <i class="fas fa-check mr-2"></i>변경
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 새 구매 요청 모달 -->
+  <div id="new-purchase-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-blue-500 to-indigo-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-plus-circle"></i>
+          새 구매 요청
+        </h3>
+        <button onclick="app.closeNewPurchaseModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Form -->
+      <div class="p-6 overflow-y-auto" style="max-height: 70vh;">
+        <!-- Reason -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-comment-dots mr-1 text-blue-600"></i>구매 사유 *
+          </label>
+          <textarea id="new-purchase-reason" rows="3" placeholder="구매가 필요한 이유를 입력하세요" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required></textarea>
+        </div>
+
+        <!-- Items -->
+        <div class="mb-4">
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-sm font-medium text-gray-700">
+              <i class="fas fa-boxes mr-1 text-blue-600"></i>물품 목록 *
+            </label>
+            <button onclick="app.addPurchaseItemRow()" class="px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+              <i class="fas fa-plus mr-1"></i>물품 추가
+            </button>
+          </div>
+          <div id="new-purchase-items" class="space-y-3">
+            <!-- Dynamic items will be added here -->
+          </div>
+        </div>
+
+        <!-- Total Amount -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-700">총 예상 금액:</span>
+            <span id="new-purchase-total" class="text-xl font-bold text-blue-600">₩0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 p-6 border-t bg-gray-50">
+        <button onclick="app.closeNewPurchaseModal()" class="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium">
+          취소
+        </button>
+        <button onclick="app.submitNewPurchaseRequest()" class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md font-medium">
+          <i class="fas fa-paper-plane mr-2"></i>요청 제출
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ==============================================
+    // BDXI 직원 PWA 앱 v2.0
+    // GPS 위치 기반 인증 시스템
+    // ==============================================
+    
+    const SUPABASE_URL = 'https://qgpqhtuynxhmgawakjxe.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncHFodHV5bnhobWdhd2FranhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyOTQyNTEsImV4cCI6MjA4Mjg3MDI1MX0.WNljQIKDbeZCDlXe8fpBdZs58XRFfujGt7lBGfq_pVg';
+    
+    const app = {
+      sb: null,
+      state: {
+        employee: null,
+        workplace: null,
+        currentLocation: null,
+        deviceFingerprint: null,
+        beforePhoto: null,
+        afterPhoto: null,
+        selectedPhotos: [],
+        currentTab: 'attendance',
+        myPurchases: [],
+        currentPurchaseTab: 'pending',
+        currentInspection: null,
+        newPurchaseItemCounter: 0,
+        todayPhotos: [],
+        currentPhotoIndex: 0,
+        calendarYear: new Date().getFullYear(),
+        calendarMonth: new Date().getMonth(), // 0-11
+        attendanceRecords: [] // 전체 출퇴근 기록 캐시
+      },
+      
+      // ==================== 초기화 ====================
+      async init() {
+        console.log('🚀 BDXI 직원 앱 초기화 시작...');
+        
+        try {
+          // Supabase 클라이언트 생성
+          this.sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          
+          // PWA 설치 프롬프트 설정
+          this.setupPWAInstall();
+          
+          // Service Worker 등록
+          await this.registerServiceWorker();
+          
+          // 기기 인증
+          await this.authenticateDevice();
+          
+          // 직원 정보 로드
+          await this.loadEmployee();
+          
+          // 근무지 정보 로드
+          await this.loadWorkplace();
+          
+          // 위치 권한 요청 및 GPS 시작
+          await this.startGPSTracking();
+          
+          // 이벤트 리스너 설정
+          this.setupEventListeners();
+          
+          // UI 렌더링
+          this.renderUI();
+          
+          // 로딩 화면 숨기기
+          document.getElementById('loading-screen').classList.add('hidden');
+          document.getElementById('main-container').classList.remove('hidden');
+          
+          // 기본 근태 탭 표시 (사용 빈도가 가장 높음)
+          // 급여는 월 1회만 확인하므로 자동 전환하지 않음
+          
+          console.log('✅ 앱 초기화 완료!');
+          this.showToast('환영합니다! 👋', 'success');
+          
+        } catch (error) {
+          console.error('❌ 앱 초기화 실패:', error);
+          alert('앱을 시작할 수 없습니다.\n' + error.message);
+        }
+      },
+      
+      // ==================== PWA 설치 ====================
+      setupPWAInstall() {
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          
+          // 설치 배너 표시
+          const installPrompt = document.getElementById('install-prompt');
+          setTimeout(() => {
+            installPrompt.classList.add('show');
+          }, 3000);
+        });
+        
+        document.getElementById('install-btn').addEventListener('click', async () => {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`PWA 설치: ${outcome}`);
+            deferredPrompt = null;
+          }
+          document.getElementById('install-prompt').classList.remove('show');
+        });
+        
+        document.getElementById('install-close').addEventListener('click', () => {
+          document.getElementById('install-prompt').classList.remove('show');
+        });
+      },
+      
+      // ==================== Service Worker ====================
+      async registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+          try {
+            const registration = await navigator.serviceWorker.register('/service-worker.js');
+            console.log('✅ Service Worker 등록 완료:', registration.scope);
+          } catch (error) {
+            console.error('❌ Service Worker 등록 실패:', error);
+          }
+        }
+      },
+      
+      // ==================== 기기 인증 ====================
+      async authenticateDevice() {
+        // 브라우저 지문 생성 (간단 버전)
+        const fingerprint = await this.generateFingerprint();
+        this.state.deviceFingerprint = fingerprint;
+        
+        console.log('🔑 기기 지문:', fingerprint.substring(0, 16) + '...');
+        
+        // 1. 세션 스토리지 체크 (급여명세서 로그인에서 온 경우)
+        const sessionEmployeeId = sessionStorage.getItem('payroll_employee_id');
+        const sessionEmployeeName = sessionStorage.getItem('payroll_employee_name');
+        
+        if (sessionEmployeeId && sessionEmployeeName) {
+          console.log('✅ 급여명세서 세션 인증 정보 발견');
+          // localStorage로 복사하여 통일
+          localStorage.setItem('employee_id', sessionEmployeeId);
+          localStorage.setItem('employee_token', fingerprint); // 임시 토큰 생성
+          return { token: fingerprint, employeeId: sessionEmployeeId };
+        }
+        
+        // 2. 로컬 스토리지에서 직원 토큰 확인
+        const savedToken = localStorage.getItem('employee_token');
+        const savedEmployeeId = localStorage.getItem('employee_id');
+        
+        if (savedToken && savedEmployeeId) {
+          console.log('✅ 저장된 인증 정보 발견');
+          return { token: savedToken, employeeId: savedEmployeeId };
+        }
+        
+        return null;
+      },
+      
+      async generateFingerprint() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText('fingerprint', 2, 2);
+        const canvasData = canvas.toDataURL();
+        
+        const data = [
+          navigator.userAgent,
+          navigator.language,
+          screen.width + 'x' + screen.height,
+          new Date().getTimezoneOffset(),
+          canvasData
+        ].join('|');
+        
+        // 간단한 해시 생성
+        let hash = 0;
+        for (let i = 0; i < data.length; i++) {
+          const char = data.charCodeAt(i);
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash;
+        }
+        
+        return 'fp_' + Math.abs(hash).toString(36) + '_' + Date.now();
+      },
+      
+      // ==================== 직원 정보 로드 ====================
+      async loadEmployee() {
+        const savedEmployeeId = localStorage.getItem('employee_id');
+        
+        if (!savedEmployeeId) {
+          // 직원 선택 필요
+          await this.showEmployeeSelector();
+          return;
+        }
+        
+        // DB에서 직원 정보 조회
+        const { data, error } = await this.sb
+          .from('employees')
+          .select('*')
+          .eq('id', savedEmployeeId)
+          .single();
+        
+        if (error || !data) {
+          console.error('직원 정보 로드 실패:', error);
+          localStorage.removeItem('employee_id');
+          await this.showEmployeeSelector();
+          return;
+        }
+        
+        this.state.employee = data;
+        console.log('✅ 직원 정보 로드:', data.name);
+        
+        // 마지막 로그인 시간 업데이트
+        await this.sb
+          .from('employees')
+          .update({
+            device_fingerprint: this.state.deviceFingerprint,
+            last_login_at: new Date().toISOString()
+          })
+          .eq('id', savedEmployeeId);
+      },
+      
+      // ==================== 직원 선택 UI ====================
+      async showEmployeeSelector() {
+        // 이름 + 전화번호 뒷자리 4자리 입력
+        const name = prompt('이름을 입력하세요:');
+        if (!name) {
+          alert('이름이 필요합니다.');
+          location.reload();
+          return;
+        }
+        
+        const phone4 = prompt('전화번호 뒷자리 4자리를 입력하세요:\n(예: 1234)');
+        if (!phone4 || phone4.length !== 4) {
+          alert('전화번호 뒷자리 4자리를 정확히 입력해주세요.');
+          location.reload();
+          return;
+        }
+        
+        // DB에서 직원 검색 (이름 + 전화번호 뒷자리)
+        const { data: employees, error } = await this.sb
+          .from('employees')
+          .select(`
+            *,
+            apartment:apartments(code, name)
+          `)
+          .ilike('name', name);
+        
+        if (error) {
+          console.error('직원 검색 실패:', error);
+          alert('직원 검색 중 오류가 발생했습니다.');
+          location.reload();
+          return;
+        }
+        
+        if (!employees || employees.length === 0) {
+          alert('일치하는 직원을 찾을 수 없습니다.');
+          location.reload();
+          return;
+        }
+        
+        // 전화번호 뒷자리로 필터링
+        const matched = employees.filter(emp => {
+          const phone = emp.phone || '';
+          const last4 = phone.replace(/\D/g, '').slice(-4);
+          return last4 === phone4;
+        });
+        
+        if (matched.length === 0) {
+          alert('이름 또는 전화번호가 일치하지 않습니다.');
+          location.reload();
+          return;
+        }
+        
+        if (matched.length > 1) {
+          // 여러 명이면 선택 (단지 정보 포함)
+          const names = matched.map((e, i) => {
+            const aptName = e.apartment?.name || '알 수 없음';
+            const position = e.position || '직원';
+            return `${i + 1}. ${e.name} (${aptName} - ${position})`;
+          }).join('\n');
+          
+          const choice = parseInt(prompt(`여러 개의 계정이 검색되었습니다. 번호를 선택하세요:\n${names}`));
+          
+          if (!choice || choice < 1 || choice > matched.length) {
+            alert('올바른 번호를 선택해주세요.');
+            location.reload();
+            return;
+          }
+          
+          this.state.employee = matched[choice - 1];
+        } else {
+          // 한 명만 매칭
+          this.state.employee = matched[0];
+        }
+        
+        localStorage.setItem('employee_id', this.state.employee.id);
+        
+        const aptName = this.state.employee.apartment?.name || '단지 정보 없음';
+        const position = this.state.employee.position || '직원';
+        
+        console.log('✅ 직원 인증 성공:', this.state.employee.name, aptName, position);
+        
+        // 인증 성공 메시지
+        alert(`환영합니다!\n\n이름: ${this.state.employee.name}\n소속: ${aptName}\n직책: ${position}`);
+      },
+      
+      // ==================== 근무지 정보 로드 ====================
+      async loadWorkplace() {
+        if (!this.state.employee || !this.state.employee.apartment_id) {
+          console.error('❌ 직원의 단지 정보가 없습니다');
+          return;
+        }
+        
+        const { data, error } = await this.sb
+          .from('apartments')
+          .select('*')
+          .eq('id', this.state.employee.apartment_id)
+          .single();
+        
+        if (error || !data) {
+          console.error('근무지 정보 로드 실패:', error);
+          return;
+        }
+        
+        this.state.workplace = data;
+        console.log('✅ 근무지 정보 로드:', data.name);
+        console.log('📍 허용 반경:', data.allowed_radius_meters, 'm');
+      },
+      
+      // ==================== GPS 추적 시작 ====================
+      async startGPSTracking() {
+        if (!('geolocation' in navigator)) {
+          alert('이 기기는 위치 서비스를 지원하지 않습니다.');
+          return;
+        }
+        
+        try {
+          // 위치 권한 요청
+          const permission = await navigator.permissions.query({ name: 'geolocation' });
+          console.log('위치 권한 상태:', permission.state);
+          
+          // 실시간 위치 추적
+          this.watchGPS();
+          
+        } catch (error) {
+          console.error('GPS 추적 시작 실패:', error);
+        }
+      },
+      
+      watchGPS() {
+        console.log('🔍 GPS 추적 시작...');
+        console.log('📱 User Agent:', navigator.userAgent);
+        console.log('🌍 Geolocation 지원:', !!navigator.geolocation);
+        
+        // iOS Safari에서 즉시 권한 요청
+        if (!navigator.geolocation) {
+          this.showLocationError({ 
+            code: 0, 
+            message: '이 브라우저는 위치 서비스를 지원하지 않습니다.' 
+          });
+          return;
+        }
+        
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 15000, // iOS를 위해 타임아웃 증가
+          maximumAge: 0
+        };
+        
+        console.log('⚙️ GPS 옵션:', options);
+        
+        navigator.geolocation.watchPosition(
+          (position) => {
+            console.log('✅ GPS 성공:', {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy
+            });
+            
+            this.state.currentLocation = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              timestamp: new Date(position.timestamp)
+            };
+            
+            // GPS 인디케이터 활성화
+            document.getElementById('gps-indicator').classList.remove('inactive');
+            document.getElementById('gps-indicator').classList.add('active');
+            
+            // 위치 정보 업데이트
+            this.updateLocationInfo();
+          },
+          (error) => {
+            console.error('❌ GPS 오류:', {
+              code: error.code,
+              message: error.message,
+              PERMISSION_DENIED: error.PERMISSION_DENIED,
+              POSITION_UNAVAILABLE: error.POSITION_UNAVAILABLE,
+              TIMEOUT: error.TIMEOUT
+            });
+            
+            document.getElementById('gps-indicator').classList.remove('active');
+            document.getElementById('gps-indicator').classList.add('inactive');
+            
+            this.showLocationError(error);
+          },
+          options
+        );
+      },
+      
+      updateLocationInfo() {
+        if (!this.state.currentLocation || !this.state.workplace) return;
+        
+        const distance = this.calculateDistance(
+          this.state.currentLocation.lat,
+          this.state.currentLocation.lng,
+          this.state.workplace.location_lat,
+          this.state.workplace.location_lng
+        );
+        
+        const accuracy = Math.round(this.state.currentLocation.accuracy);
+        const distanceRounded = Math.round(distance);
+        const allowedRadius = this.state.workplace.allowed_radius_meters;
+        
+        let statusHTML = '';
+        let statusColor = '';
+        
+        if (distance <= allowedRadius) {
+          statusColor = 'text-green-600';
+          statusHTML = `
+            <div class="flex items-center gap-2 ${statusColor}">
+              <i class="fas fa-check-circle"></i>
+              <span class="font-bold">근무지 범위 내 ✓</span>
+            </div>
+            <div class="text-sm text-gray-600 mt-2">
+              📍 거리: ${distanceRounded}m / ${allowedRadius}m<br>
+              🎯 정확도: ±${accuracy}m
+            </div>
+          `;
+        } else {
+          statusColor = 'text-orange-600';
+          statusHTML = `
+            <div class="flex items-center gap-2 ${statusColor}">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span class="font-bold">근무지 범위 밖 ⚠️</span>
+            </div>
+            <div class="text-sm text-gray-600 mt-2">
+              📍 거리: ${distanceRounded}m / ${allowedRadius}m<br>
+              🎯 정확도: ±${accuracy}m<br>
+              <span class="text-orange-600">ℹ️ 출퇴근 기록은 ${allowedRadius}m 이내에서만 가능합니다</span>
+            </div>
+          `;
+        }
+        
+        document.getElementById('location-info').innerHTML = statusHTML;
+        document.getElementById('header-location').textContent = 
+          `📍 ${this.state.workplace.name} (${distanceRounded}m)`;
+      },
+      
+      showLocationError(error) {
+        let message = 'GPS 위치를 가져올 수 없습니다';
+        let showSettingsButton = false;
+        let debugInfo = '';
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+          case 1:
+            message = '위치 권한이 거부되었습니다. 설정에서 권한을 허용해주세요.';
+            showSettingsButton = true;
+            debugInfo = `(오류 코드: ${error.code} - PERMISSION_DENIED)`;
+            break;
+          case error.POSITION_UNAVAILABLE:
+          case 2:
+            message = 'GPS 신호를 받을 수 없습니다. 야외로 나가주세요.';
+            debugInfo = `(오류 코드: ${error.code} - POSITION_UNAVAILABLE)`;
+            break;
+          case error.TIMEOUT:
+          case 3:
+            message = 'GPS 위치를 가져오는데 시간이 너무 오래 걸립니다.';
+            debugInfo = `(오류 코드: ${error.code} - TIMEOUT)`;
+            break;
+          default:
+            message = error.message || 'GPS 위치를 가져올 수 없습니다';
+            debugInfo = `(오류 코드: ${error.code})`;
+        }
+        
+        console.log('🔴 위치 오류 표시:', { code: error.code, message, debugInfo });
+        
+        document.getElementById('location-info').innerHTML = `
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center gap-2 text-red-600">
+              <i class="fas fa-exclamation-circle"></i>
+              <span>${message}</span>
+            </div>
+            <div class="text-xs text-gray-500">${debugInfo}</div>
+            ${showSettingsButton ? `
+              <button 
+                onclick="app.openLocationSettings()" 
+                class="btn-touch bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 transition"
+              >
+                <i class="fas fa-cog"></i>
+                위치 권한 설정 열기
+              </button>
+            ` : ''}
+          </div>
+        `;
+      },
+      
+      // ==================== 위치 설정 열기 ====================
+      openLocationSettings() {
+        // iOS Safari
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+          alert('📱 위치 권한 허용 방법:\n\n1. 설정 앱 열기\n2. Safari → 위치\n3. "사용하는 동안" 선택');
+          return;
+        }
+        
+        // Android Chrome
+        if (/Android/.test(navigator.userAgent)) {
+          // Chrome의 경우 설정으로 직접 이동 시도
+          const currentUrl = window.location.href;
+          
+          // Chrome 사이트 설정으로 이동
+          const settingsUrl = 'chrome://settings/content/siteDetails?site=' + encodeURIComponent(currentUrl);
+          
+          try {
+            window.open(settingsUrl, '_blank');
+          } catch (e) {
+            // 직접 열기 실패 시 안내
+            this.showToast('📱 위치 권한 허용 방법:\n\n1. 주소창 왼쪽 자물쇠/정보 아이콘 터치\n2. "권한" 또는 "사이트 설정" 선택\n3. 위치 → 허용', 'info', 5000);
+          }
+          return;
+        }
+        
+        // 기타 브라우저
+        alert('📱 위치 권한을 허용하려면:\n\n브라우저 설정에서 이 사이트의 위치 권한을 허용해주세요.');
+      },
+      
+      // ==================== 거리 계산 (Haversine) ====================
+      calculateDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371e3; // 지구 반경 (미터)
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lng2 - lng1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c; // 미터
+      },
+      
+      // ==================== 위치 검증 ====================
+      async verifyLocation(requiredAction = '출퇴근') {
+        if (!this.state.currentLocation) {
+          throw new Error('GPS 위치를 가져오는 중입니다. 잠시 후 다시 시도해주세요.');
+        }
+        
+        if (!this.state.workplace) {
+          throw new Error('근무지 정보를 찾을 수 없습니다.');
+        }
+        
+        const accuracy = this.state.currentLocation.accuracy;
+        const allowedRadius = this.state.workplace.allowed_radius_meters;
+        
+        // 정확도 체크
+        if (accuracy > 100) {
+          throw new Error(
+            `GPS 정확도가 낮습니다 (±${Math.round(accuracy)}m).\n` +
+            `창문 근처나 야외로 이동해주세요.`
+          );
+        }
+        
+        // 거리 계산
+        const distance = this.calculateDistance(
+          this.state.currentLocation.lat,
+          this.state.currentLocation.lng,
+          this.state.workplace.location_lat,
+          this.state.workplace.location_lng
+        );
+        
+        // 거리 체크
+        if (distance > allowedRadius) {
+          throw new Error(
+            `${requiredAction}은(는) 근무지 ${allowedRadius}m 이내에서만 가능합니다.\n` +
+            `현재 거리: ${Math.round(distance)}m`
+          );
+        }
+        
+        return {
+          verified: true,
+          location: {
+            lat: this.state.currentLocation.lat,
+            lng: this.state.currentLocation.lng
+          },
+          accuracy: Math.round(accuracy),
+          distance: Math.round(distance)
+        };
+      },
+      
+      // ==================== 특이사항 기록 ====================
+      async recordAttendanceNote(noteType, reason) {
+        if (!this.state.employee || !this.state.employee.id) {
+          console.error('❌ 선택된 직원 없음');
+          return;
+        }
+        
+        try {
+          const now = new Date();
+          
+          // 한국 시간(KST) 기준으로 날짜/시간 계산 (UTC + 9시간)
+          const kstOffset = 9 * 60 * 60 * 1000;
+          const kstNow = new Date(now.getTime() + kstOffset);
+          const noteDate = kstNow.toISOString().split('T')[0]; // YYYY-MM-DD (KST)
+          const noteTime = kstNow.toISOString().split('T')[1].split('.')[0]; // HH:MM:SS (KST)
+          
+          console.log('🕐 시간 정보:', {
+            'UTC': now.toISOString(),
+            'UTC_timestamp': now.getTime(),
+            'KST_timestamp': kstNow.getTime(),
+            'KST': kstNow.toISOString(),
+            'noteDate': noteDate,
+            'noteTime': noteTime
+          });
+          
+          const noteData = {
+            apartment_id: this.state.workplace.id,
+            employee_name: this.state.employee.name,
+            note_date: noteDate,
+            note_time: noteTime,
+            note_type: noteType,
+            reason: reason,
+            created_at: now.toISOString()
+          };
+          
+          console.log('📝 특이사항 기록 시도:', noteData);
+          
+          const { data, error } = await this.sb
+            .from('attendance_notes')
+            .insert([noteData]);
+          
+          if (error) {
+            console.error('❌ 특이사항 기록 실패:', error);
+            throw error;
+          }
+          
+          console.log('✅ 특이사항 기록 완료:', noteData);
+          
+        } catch (err) {
+          console.error('❌ 특이사항 기록 중 오류:', err);
+        }
+      },
+      
+      // ==================== 출퇴근 기록 ====================
+      async recordAttendance(type) {
+        try {
+          // GPS 위치 검증
+          const verification = await this.verifyLocation('출퇴근 기록');
+          
+          this.showToast(`${type} 기록 중...`, 'info');
+          
+          // 🔍 0단계: 직원 정보 검증 (출근 시에만)
+          if (type === '출근') {
+            const { data: empInfo } = await this.sb
+              .from('employees')
+              .select('work_days, work_start_time, work_end_time, contract_start, contract_end')
+              .eq('id', this.state.employee.id)
+              .single();
+            
+            // 근무요일 미설정 체크
+            if (!empInfo || !empInfo.work_days || empInfo.work_days.length === 0) {
+              this.showToast('⚠️ 근무요일이 설정되지 않았습니다. 관리자에게 문의하여 근무요일을 등록해주세요.', 'error');
+              console.error('❌ 근무요일 미설정:', this.state.employee.name);
+              return;
+            }
+            
+            // 계약기간 미설정 체크
+            if (!empInfo.contract_start || !empInfo.contract_end) {
+              this.showToast('⚠️ 계약기간이 설정되지 않았습니다. 관리자에게 문의하여 계약정보를 등록해주세요.', 'error');
+              console.error('❌ 계약기간 미설정:', this.state.employee.name);
+              return;
+            }
+            
+            // 계약기간 만료 체크
+            const today = new Date();
+            const contractEnd = new Date(empInfo.contract_end);
+            if (today > contractEnd) {
+              this.showToast('⚠️ 계약기간이 만료되었습니다. 관리자에게 문의해주세요.', 'error');
+              console.error('❌ 계약만료:', this.state.employee.name, empInfo.contract_end);
+              return;
+            }
+            
+            // 🔍 1단계: 공휴일 및 근무시간 체크
+            const kstOffset = 9 * 60 * 60 * 1000;
+            const kstDate = new Date(today.getTime() + kstOffset);
+            const todayStr = kstDate.toISOString().split('T')[0];
+            
+            console.log('📅 현재 시간:', {
+              UTC: today.toISOString(),
+              'UTC_timestamp': today.getTime(),
+              'KST_timestamp': kstDate.getTime(),
+              'KST_ISO': kstDate.toISOString(),
+              '오늘날짜_KST': todayStr
+            });
+            
+            // 1-1. 공휴일 조회
+            const { data: todayHolidays } = await this.sb
+              .from('holidays')
+              .select('holiday_name, holiday_type')
+              .eq('apartment_id', this.state.workplace.id)
+              .eq('holiday_date', todayStr);
+            
+            console.log('📅 오늘 공휴일 확인:', todayHolidays);
+            
+            if (todayHolidays && todayHolidays.length > 0) {
+              const holiday = todayHolidays[0];
+              const typeLabel = {
+                'national': '법정공휴일',
+                'substitute': '대체공휴일',
+                'temporary': '임시공휴일'
+              }[holiday.holiday_type] || '공휴일';
+              
+              const reason = prompt(
+                `⚠️ 오늘은 ${typeLabel}입니다.\n` +
+                `공휴일: ${holiday.holiday_name}\n\n` +
+                `그래도 출근하시겠습니까?\n` +
+                `사유를 입력해주세요 (취소하려면 빈 칸으로 제출):`,
+                ''
+              );
+              
+              if (reason === null || reason.trim() === '') {
+                console.log('✅ 사용자가 공휴일 출근 취소');
+                return;
+              }
+              
+              console.log('📝 공휴일 출근 사유:', reason);
+              
+              const detailedReason = `${reason} [${typeLabel}: ${holiday.holiday_name}]`;
+              await this.recordAttendanceNote('holiday_work', detailedReason);
+            }
+            
+            // 1-2. 근무시간 체크
+            if (empInfo.work_start_time && empInfo.work_end_time) {
+              const now = new Date();
+              const currentTime = now.getHours() * 60 + now.getMinutes();
+              
+              const [startHour, startMin] = empInfo.work_start_time.split(':').map(Number);
+              const [endHour, endMin] = empInfo.work_end_time.split(':').map(Number);
+              const workStart = startHour * 60 + startMin;
+              const workEnd = endHour * 60 + endMin;
+              
+              console.log('🕐 근무시간 체크:', {
+                현재시각: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`,
+                근무시작: empInfo.work_start_time,
+                근무종료: empInfo.work_end_time,
+                currentTime분: currentTime,
+                workStart분: workStart,
+                workEnd분: workEnd
+              });
+              
+              let isWithinWorkTime = false;
+              
+              if (workStart < workEnd) {
+                isWithinWorkTime = currentTime >= workStart && currentTime <= workEnd;
+              } else {
+                isWithinWorkTime = currentTime >= workStart || currentTime <= workEnd;
+              }
+              
+              console.log('✅ 근무시간 범위 내:', isWithinWorkTime);
+              
+              if (!isWithinWorkTime) {
+                let timeDiff;
+                let message;
+                
+                if (workStart < workEnd) {
+                  if (currentTime < workStart) {
+                    timeDiff = workStart - currentTime;
+                    const hours = Math.floor(timeDiff / 60);
+                    const mins = timeDiff % 60;
+                    message = `⏰ 근무 시작 시간보다 ${hours > 0 ? hours + '시간 ' : ''}${mins}분 일찍 출근하려고 합니다.\n` +
+                      `근무시간: ${empInfo.work_start_time} ~ ${empInfo.work_end_time}\n` +
+                      `현재시각: ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}\n\n` +
+                      `그래도 출근하시겠습니까?\n` +
+                      `사유를 입력해주세요 (취소하려면 빈 칸으로 제출):`;
+                  } else {
+                    timeDiff = currentTime - workEnd;
+                    const hours = Math.floor(timeDiff / 60);
+                    const mins = timeDiff % 60;
+                    message = `⏰ 근무 종료 시간보다 ${hours > 0 ? hours + '시간 ' : ''}${mins}분 늦게 출근하려고 합니다.\n` +
+                      `근무시간: ${empInfo.work_start_time} ~ ${empInfo.work_end_time}\n` +
+                      `현재시각: ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}\n\n` +
+                      `그래도 출근하시겠습니까?\n` +
+                      `사유를 입력해주세요 (취소하려면 빈 칸으로 제출):`;
+                  }
+                } else {
+                  if (currentTime > workEnd && currentTime < workStart) {
+                    let timeUntilStart;
+                    if (currentTime < workStart) {
+                      timeUntilStart = workStart - currentTime;
+                    } else {
+                      timeUntilStart = (1440 - currentTime) + workStart;
+                    }
+                    const hours = Math.floor(timeUntilStart / 60);
+                    const mins = timeUntilStart % 60;
+                    message = `⏰ 근무시간이 아닙니다.\n` +
+                      `근무시간: ${empInfo.work_start_time} ~ ${empInfo.work_end_time}\n` +
+                      `현재시각: ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}\n` +
+                      `다음 근무까지 ${hours > 0 ? hours + '시간 ' : ''}${mins}분 남았습니다.\n\n` +
+                      `그래도 출근하시겠습니까?\n` +
+                      `사유를 입력해주세요 (취소하려면 빈 칸으로 제출):`;
+                  }
+                }
+                
+                if (message) {
+                  const reason = prompt(message, '');
+                  
+                  if (reason === null || reason.trim() === '') {
+                    console.log('✅ 사용자가 근무시간 외 출근 취소');
+                    return;
+                  }
+                  
+                  console.log('📝 근무시간 외 출근 사유:', reason);
+                  
+                  const timeDiffText = message.includes('일찍') ? `${Math.floor(timeDiff/60)}시간 ${timeDiff%60}분 일찍` : `${Math.floor(timeDiff/60)}시간 ${timeDiff%60}분 늦게`;
+                  const detailedReason = `${reason} [근무시간: ${empInfo.work_start_time}~${empInfo.work_end_time}, ${timeDiffText}]`;
+                  await this.recordAttendanceNote('outside_work_hours', detailedReason);
+                }
+              }
+              
+              // 지각 체크
+              if (isWithinWorkTime) {
+                let lateMinutes = 0;
+                
+                if (workStart < workEnd) {
+                  if (currentTime > workStart) {
+                    lateMinutes = currentTime - workStart;
+                  }
+                } else {
+                  if (currentTime < workEnd) {
+                    lateMinutes = currentTime - 0;
+                  } else if (currentTime >= workStart) {
+                    lateMinutes = currentTime - workStart;
+                  }
+                }
+                
+                if (lateMinutes > 10) {
+                  console.warn(`⚠️ 지각: ${lateMinutes}분 늦음`);
+                }
+              }
+            }
+            
+            // 🔍 2단계: 중복 출근 체크
+            const { data: todayRecords } = await this.sb
+              .from('attendance_records')
+              .select('*')
+              .eq('employee_id', this.state.employee.id)
+              .eq('attendance_type', '출근')
+              .gte('scan_time', todayStr + 'T00:00:00')
+              .lte('scan_time', todayStr + 'T23:59:59');
+            
+            if (todayRecords && todayRecords.length > 0) {
+              const lastCheckIn = todayRecords[todayRecords.length - 1];
+              const lastCheckInTime = new Date(lastCheckIn.scan_time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+              
+              const reason = prompt(
+                `⚠️ 오늘 이미 출근 기록이 있습니다.\n` +
+                `마지막 출근: ${lastCheckInTime}\n\n` +
+                `그래도 출근하시겠습니까?\n` +
+                `사유를 입력해주세요 (취소하려면 빈 칸으로 제출):`,
+                ''
+              );
+              
+              if (reason === null || reason.trim() === '') {
+                console.log('✅ 사용자가 중복 출근 취소');
+                return;
+              }
+              
+              console.log('📝 중복 출근 사유:', reason);
+              
+              const detailedReason = `${reason} [이전 출근: ${lastCheckInTime} ${lastCheckIn.location || '-'}]`;
+              await this.recordAttendanceNote('duplicate_checkin', detailedReason);
+            }
+            
+            // 🔍 3단계: 비근무일 체크
+            const dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][today.getDay()];
+            if (!empInfo.work_days.includes(dayOfWeek)) {
+              const reason = prompt(
+                `⚠️ 오늘은 근무일(${empInfo.work_days.join(', ')})이 아닙니다.\n` +
+                `현재: ${dayOfWeek}요일\n\n` +
+                `그래도 출근하시겠습니까?\n` +
+                `사유를 입력해주세요 (취소하려면 빈 칸으로 제출):`,
+                ''
+              );
+              
+              if (reason === null || reason.trim() === '') {
+                console.log('✅ 사용자가 비근무일 출근 취소');
+                return;
+              }
+              
+              console.log('📝 비근무일 출근 사유:', reason);
+              
+              const detailedReason = `${reason} [근무요일: ${empInfo.work_days.join(', ')}, 오늘: ${dayOfWeek}요일]`;
+              await this.recordAttendanceNote('non_work_day', detailedReason);
+            }
+            
+            // 🔍 4단계: 미완료 퇴근 차단 검증 (출근 시에만)
+            console.log('🔍 미완료 퇴근 차단 검증 시작:', {
+              aptId: this.state.workplace.id,
+              empId: this.state.employee.id,
+              empName: this.state.employee.name
+            });
+            
+            const { data: validationResult, error: validationError } = await this.sb
+              .rpc('validate_check_in', {
+                apartment_id_param: this.state.workplace.id,
+                employee_id_param: this.state.employee.id
+              });
+            
+            console.log('📊 차단 검증 결과:', { validationResult, validationError });
+            
+            if (validationError) {
+              console.error('❌ 차단 검증 실패:', validationError);
+            } else if (validationResult && validationResult.blocked) {
+              const incompleteRecords = validationResult.incomplete_records || [];
+              
+              // 1단계: 직원 근무 패턴은 이미 위에서 로드했으므로 empInfo 사용
+              const workDays = empInfo.work_days || [];
+              console.log('📋 직원 근무요일:', workDays);
+              
+              // 2단계: 휴무일 조회 (vacations 테이블 - 승인된 휴가만)
+              const { data: vacations } = await this.sb
+                .from('vacations')
+                .select('start_date, end_date')
+                .eq('employee_id', this.state.employee.id)
+                .eq('status', 'approved');
+              
+              console.log('📅 승인된 개인 휴무일:', vacations);
+              
+              // 3단계: 공휴일 조회 (holidays 테이블)
+              const { data: holidays } = await this.sb
+                .from('holidays')
+                .select('holiday_date')
+                .eq('apartment_id', this.state.workplace.id);
+              
+              console.log('🎌 공휴일 목록:', holidays);
+              
+              // 4단계: 종합 필터링
+              const dayMap = {
+                0: '일', 1: '월', 2: '화', 3: '수', 
+                4: '목', 5: '금', 6: '토'
+              };
+              
+              const filteredRecords = incompleteRecords.filter(record => {
+                const recordDate = new Date(record.date);
+                const dayOfWeek = dayMap[recordDate.getDay()];
+                
+                // 4-1. 근무요일 체크
+                if (workDays.length > 0 && !workDays.includes(dayOfWeek)) {
+                  console.log(`📅 ${record.date}는 ${dayOfWeek}요일 (비근무일) - 차단 제외`);
+                  return false;
+                }
+                
+                // 4-2. 개인 휴무일 체크
+                const isVacation = vacations?.some(v => {
+                  const start = new Date(v.start_date);
+                  const end = new Date(v.end_date);
+                  return recordDate >= start && recordDate <= end;
+                });
+                
+                if (isVacation) {
+                  console.log(`🏖️ ${record.date}는 개인 휴무일 - 차단 제외`);
+                  return false;
+                }
+                
+                // 4-3. 공휴일 체크
+                const isHoliday = holidays?.some(h => {
+                  const holidayDate = new Date(h.holiday_date);
+                  return recordDate.toDateString() === holidayDate.toDateString();
+                });
+                
+                if (isHoliday) {
+                  console.log(`🎌 ${record.date}는 공휴일 - 차단 제외`);
+                  return false;
+                }
+                
+                // 모든 필터를 통과한 경우만 포함
+                return true;
+              });
+              
+              // 5단계: 중복 날짜 제거
+              const uniqueDates = new Map();
+              filteredRecords.forEach(record => {
+                if (!uniqueDates.has(record.date)) {
+                  uniqueDates.set(record.date, record);
+                }
+              });
+              const uniqueRecords = Array.from(uniqueDates.values());
+              
+              console.log('🔍 필터링 결과:', {
+                원본: incompleteRecords.length,
+                근무요일_필터: filteredRecords.length,
+                중복제거: uniqueRecords.length,
+                근무요일: workDays.join(',')
+              });
+              
+              // 6단계: 차단 기준 (3건 이상)
+              if (uniqueRecords.length >= 3) {
+                let message = `🚫 출근이 차단되었습니다\n\n`;
+                message += `퇴근 기록이 없는 날이 ${uniqueRecords.length}건 있습니다:\n\n`;
+                
+                uniqueRecords.slice(0, 3).forEach(record => {
+                  const date = new Date(record.date).toLocaleDateString('ko-KR');
+                  message += `• ${date} (${record.days_ago}일 전)\n`;
+                });
+                
+                if (uniqueRecords.length > 3) {
+                  message += `• ... 외 ${uniqueRecords.length - 3}건\n`;
+                }
+                
+                message += `\n센터 관리자에게 문의하여\n퇴근 시간을 등록해주세요.`;
+                
+                alert(message);
+                console.log('🚫 출근 차단됨!', { count: uniqueRecords.length, records: uniqueRecords });
+                return;
+              }
+            }
+          }
+          
+          // DB에 저장
+          const { data, error } = await this.sb
+            .from('attendance_records')
+            .insert({
+              employee_id: this.state.employee.id,
+              employee_name: this.state.employee.name,
+              apartment_id: this.state.workplace.id,
+              location_id: this.state.workplace.id,
+              attendance_type: type,
+              scan_time: new Date().toISOString(),
+              location_lat: verification.location.lat,
+              location_lng: verification.location.lng,
+              gps_accuracy: verification.accuracy,
+              distance_from_workplace: verification.distance
+            });
+          
+          if (error) throw error;
+          
+          this.showToast(`✅ ${type} 기록 완료!`, 'success');
+          
+          // 오늘의 기록 새로고침
+          await this.loadTodayAttendance();
+          
+        } catch (error) {
+          console.error('출퇴근 기록 실패:', error);
+          this.showToast(`❌ ${error.message}`, 'error');
+        }
+      },
+      
+      async loadTodayAttendance() {
+        const today = new Date().toISOString().split('T')[0];
+        
+        const { data, error} = await this.sb
+          .from('attendance_records')
+          .select('*')
+          .eq('employee_id', this.state.employee.id)
+          .gte('scan_time', today + 'T00:00:00')
+          .order('scan_time', { ascending: false });
+        
+        if (error) {
+          console.error('기록 로드 실패:', error);
+          return;
+        }
+        
+        const container = document.getElementById('today-attendance');
+        
+        if (!data || data.length === 0) {
+          container.innerHTML = `
+            <div class="text-center text-gray-400 py-8">
+              <i class="fas fa-clipboard-list text-4xl mb-2"></i>
+              <div>기록이 없습니다</div>
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = data.map(record => {
+          const time = new Date(record.scan_time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+          const typeIcons = {
+            '출근': { icon: 'fa-sign-in-alt', color: 'text-green-600', bg: 'bg-green-50' },
+            '퇴근': { icon: 'fa-sign-out-alt', color: 'text-orange-600', bg: 'bg-orange-50' },
+            '휴게 시작': { icon: 'fa-coffee', color: 'text-blue-600', bg: 'bg-blue-50' },
+            '휴게 종료': { icon: 'fa-play', color: 'text-purple-600', bg: 'bg-purple-50' }
+          };
+          const style = typeIcons[record.attendance_type] || typeIcons['출근'];
+          
+          return `
+            <div class="${style.bg} border-l-4 border-${style.color.split('-')[1]}-500 p-3 rounded">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <i class="fas ${style.icon} ${style.color}"></i>
+                  <span class="font-bold">${record.attendance_type}</span>
+                </div>
+                <span class="text-sm text-gray-600">${time}</span>
+              </div>
+              ${record.distance_from_workplace ? `
+                <div class="text-xs text-gray-500 mt-1">
+                  📍 거리: ${Math.round(record.distance_from_workplace)}m / 정확도: ±${Math.round(record.gps_accuracy)}m
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+      },
+      
+      // ==================== 휴가 관리 ====================
+      openVacationModal() {
+        // 오늘 날짜를 기본값으로 설정
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('vacation-start-date').value = today;
+        document.getElementById('vacation-end-date').value = today;
+        
+        document.getElementById('vacation-modal').classList.remove('hidden');
+        this.loadVacations();
+        this.updateVacationBadge();
+      },
+      
+      closeVacationModal() {
+        document.getElementById('vacation-modal').classList.add('hidden');
+      },
+      
+      async submitVacation() {
+        const type = document.getElementById('vacation-type').value;
+        const startDate = document.getElementById('vacation-start-date').value;
+        const endDate = document.getElementById('vacation-end-date').value;
+        const reason = document.getElementById('vacation-reason').value.trim();
+        
+        if (!startDate || !endDate) {
+          alert('휴가 시작일과 종료일을 선택해주세요.');
+          return;
+        }
+        
+        if (!reason) {
+          alert('휴가 사유를 입력해주세요.');
+          return;
+        }
+        
+        if (new Date(startDate) > new Date(endDate)) {
+          alert('시작일이 종료일보다 늦을 수 없습니다.');
+          return;
+        }
+        
+        try {
+          this.showToast('휴가 신청 중...', 'info');
+          
+          const { data, error } = await this.sb
+            .from('vacations')
+            .insert({
+              employee_id: this.state.employee.id,
+              employee_name: this.state.employee.name,
+              apartment_id: this.state.workplace.id,
+              vacation_type: type,
+              start_date: startDate,
+              end_date: endDate,
+              reason: reason,
+              status: 'pending',
+              created_at: new Date().toISOString()
+            });
+          
+          if (error) throw error;
+          
+          this.showToast('✅ 휴가 신청이 완료되었습니다!', 'success');
+          
+          // 폼 초기화
+          document.getElementById('vacation-type').value = 'annual';
+          document.getElementById('vacation-reason').value = '';
+          const today = new Date().toISOString().split('T')[0];
+          document.getElementById('vacation-start-date').value = today;
+          document.getElementById('vacation-end-date').value = today;
+          
+          // 목록 새로고침
+          await this.loadVacations();
+          await this.updateVacationBadge();
+          
+        } catch (error) {
+          console.error('휴가 신청 실패:', error);
+          this.showToast(`❌ 휴가 신청 실패: ${error.message}`, 'error');
+        }
+      },
+      
+      async loadVacations() {
+        try {
+          const { data, error } = await this.sb
+            .from('vacations')
+            .select('*')
+            .eq('employee_id', this.state.employee.id)
+            .order('created_at', { ascending: false });
+          
+          if (error) throw error;
+          
+          const container = document.getElementById('vacation-list');
+          
+          if (!data || data.length === 0) {
+            container.innerHTML = `
+              <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-calendar-times text-4xl mb-2 opacity-50"></i>
+                <p>신청 내역이 없습니다</p>
+              </div>
+            `;
+            return;
+          }
+          
+          const typeLabels = {
+            'annual': '연차',
+            'half_day': '반차',
+            'sick': '병가',
+            'personal': '개인 사유',
+            'other': '기타'
+          };
+          
+          const statusLabels = {
+            'pending': { label: '대기', color: 'bg-yellow-100 text-yellow-700', icon: 'fa-clock' },
+            'approved': { label: '승인', color: 'bg-green-100 text-green-700', icon: 'fa-check-circle' },
+            'rejected': { label: '거절', color: 'bg-red-100 text-red-700', icon: 'fa-times-circle' }
+          };
+          
+          container.innerHTML = data.map(vacation => {
+            const status = statusLabels[vacation.status] || statusLabels['pending'];
+            const startDate = new Date(vacation.start_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            const endDate = new Date(vacation.end_date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            const days = Math.ceil((new Date(vacation.end_date) - new Date(vacation.start_date)) / (1000 * 60 * 60 * 24)) + 1;
+            
+            return `
+              <div class="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition">
+                <div class="flex items-start justify-between mb-2">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="font-bold text-gray-900">${typeLabels[vacation.vacation_type] || '기타'}</span>
+                      <span class="text-xs ${status.color} px-2 py-1 rounded-full font-medium flex items-center gap-1">
+                        <i class="fas ${status.icon}"></i>
+                        ${status.label}
+                      </span>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                      <i class="fas fa-calendar mr-1"></i>
+                      ${startDate} ~ ${endDate} (${days}일)
+                    </div>
+                  </div>
+                </div>
+                <div class="text-sm text-gray-700 mt-2 pl-3 border-l-2 border-indigo-300">
+                  ${vacation.reason}
+                </div>
+                ${vacation.admin_comment ? `
+                  <div class="mt-2 text-xs text-gray-600 bg-white p-2 rounded border border-gray-200">
+                    <i class="fas fa-comment mr-1"></i>
+                    <span class="font-medium">관리자:</span> ${vacation.admin_comment}
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('');
+          
+        } catch (error) {
+          console.error('휴가 목록 로드 실패:', error);
+        }
+      },
+      
+      async updateVacationBadge() {
+        if (!this.state.employee || !this.state.employee.id) {
+          console.log('⚠️ 직원 정보 없음, 휴가 뱃지 업데이트 스킵');
+          return;
+        }
+        
+        try {
+          const { data, error } = await this.sb
+            .from('vacations')
+            .select('id')
+            .eq('employee_id', this.state.employee.id)
+            .eq('status', 'pending');
+          
+          if (error) throw error;
+          
+          const badge = document.getElementById('vacation-pending-badge');
+          const count = data?.length || 0;
+          
+          if (count > 0) {
+            badge.textContent = count;
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+          }
+          
+        } catch (error) {
+          console.error('휴가 뱃지 업데이트 실패:', error);
+        }
+      },
+      
+      // ==================== 업무 사진 ====================
+      // 이미지 압축 함수 (업로드 속도 개선)
+      async compressImage(file, maxWidth = 1920, quality = 0.8) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              
+              // 최대 너비 제한
+              if (width > maxWidth) {
+                height = (height * maxWidth) / width;
+                width = maxWidth;
+              }
+              
+              canvas.width = width;
+              canvas.height = height;
+              
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              canvas.toBlob((blob) => {
+                resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: file.lastModified }));
+              }, 'image/jpeg', quality);
+            };
+            img.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      },
+      
+      async handleSinglePhoto(input) {
+        if (!input.files || !input.files[0]) return;
+        
+        const file = input.files[0];
+        
+        // 12시간 이내 촬영 검증
+        const isValid = await this.validatePhotoTime(file);
+        if (!isValid) {
+          alert('⚠️ 촬영 시간 제한\n\n12시간 이내에 촬영된 사진만 업로드 가능합니다.\n오래된 사진의 재활용을 방지하기 위한 정책입니다.');
+          input.value = '';
+          return;
+        }
+        
+        // 기존 사진에 추가
+        this.state.selectedPhotos.push(file);
+        this.updatePhotoPreview();
+        input.value = '';
+      },
+      
+      async handleMultiplePhotos(input) {
+        if (!input.files || input.files.length === 0) return;
+        
+        const files = Array.from(input.files);
+        
+        // 최대 30장 제한
+        if (this.state.selectedPhotos.length + files.length > 30) {
+          this.showToast('⚠️ 최대 30장까지 선택 가능합니다', 'error');
+          input.value = '';
+          return;
+        }
+        
+        // 12시간 이내 촬영 검증
+        for (let file of files) {
+          const isValid = await this.validatePhotoTime(file);
+          if (!isValid) {
+            alert('⚠️ 촬영 시간 제한\n\n12시간 이내에 촬영된 사진만 업로드 가능합니다.\n일부 사진이 오래되어 제외되었습니다.');
+            continue;
+          }
+          this.state.selectedPhotos.push(file);
+        }
+        
+        this.updatePhotoPreview();
+        input.value = '';
+      },
+      
+      updatePhotoPreview() {
+        const container = document.getElementById('photo-preview-container');
+        const grid = document.getElementById('photo-preview-grid');
+        const count = document.getElementById('photo-count');
+        
+        if (this.state.selectedPhotos.length === 0) {
+          container.classList.add('hidden');
+          return;
+        }
+        
+        container.classList.remove('hidden');
+        count.textContent = this.state.selectedPhotos.length;
+        
+        grid.innerHTML = this.state.selectedPhotos.map((file, index) => {
+          const url = URL.createObjectURL(file);
+          return `
+            <div class="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-300">
+              <img src="${url}" class="w-full h-full object-cover">
+              <button onclick="app.removePhoto(${index})" class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition">
+                <i class="fas fa-times text-xs"></i>
+              </button>
+              <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-2 py-1 text-center">
+                ${index + 1}
+              </div>
+            </div>
+          `;
+        }).join('');
+      },
+      
+      removePhoto(index) {
+        this.state.selectedPhotos.splice(index, 1);
+        this.updatePhotoPreview();
+        this.showToast('사진이 제거되었습니다', 'info');
+      },
+      
+      clearSelectedPhotos() {
+        this.state.selectedPhotos = [];
+        this.updatePhotoPreview();
+        this.showToast('모든 사진이 삭제되었습니다', 'info');
+      },
+      
+      async uploadSelectedPhotos() {
+        if (this.state.selectedPhotos.length === 0) {
+          this.showToast('⚠️ 업로드할 사진을 선택하세요', 'error');
+          return;
+        }
+        
+        const btn = document.getElementById('btn-upload-photos');
+        const spinner = document.getElementById('spinner-upload');
+        const btnText = document.getElementById('btn-upload-text');
+        
+        btn.disabled = true;
+        spinner.classList.remove('hidden');
+        
+        try {
+          const notes = document.getElementById('inp-notes-single').value || '업무 사진';
+          const groupId = String(Date.now());
+          const totalPhotos = this.state.selectedPhotos.length;
+          
+          // 진행률 표시
+          let uploaded = 0;
+          const updateProgress = () => {
+            uploaded++;
+            btnText.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>업로드 중... (${uploaded}/${totalPhotos})`;
+          };
+          
+          // 이미지 압축 (병렬 처리)
+          btnText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>이미지 압축 중...';
+          const compressedFiles = await Promise.all(
+            this.state.selectedPhotos.map(file => this.compressImage(file, 1920, 0.85))
+          );
+          
+          // 업로드 (병렬 처리, 5개씩 배치)
+          const batchSize = 5;
+          const photoRecords = [];
+          
+          for (let i = 0; i < compressedFiles.length; i += batchSize) {
+            const batch = compressedFiles.slice(i, i + batchSize);
+            const batchResults = await Promise.all(
+              batch.map(async (file, batchIndex) => {
+                const index = i + batchIndex;
+                
+                // Upload to storage
+                const ext = 'jpg'; // 압축 후 jpg로 통일
+                const fileName = `${this.state.employee.apartment_id}/${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
+                
+                const { data: uploadData, error: uploadError } = await this.sb.storage
+                  .from('cleaning-photos')
+                  .upload(fileName, file);
+                
+                if (uploadError) throw uploadError;
+                
+                const { data: { publicUrl } } = this.sb.storage
+                  .from('cleaning-photos')
+                  .getPublicUrl(fileName);
+                
+                updateProgress();
+                
+                // Return DB record
+                return {
+                  employee_name: this.state.employee.name,
+                  status: 'completed',
+                  location: this.state.workplace.name,
+                  apartment_id: this.state.employee.apartment_id,
+                  photo_url: publicUrl,
+                  notes: notes,
+                  group_id: groupId,
+                  upload_type: 'single',
+                  photo_order: index,
+                  created_at: new Date().toISOString(),
+                };
+              })
+            );
+            photoRecords.push(...batchResults);
+          }
+          
+          // DB 저장
+          btnText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>저장 중...';
+          const { error: dbError } = await this.sb.from('cleaning_tasks').insert(photoRecords);
+          if (dbError) throw dbError;
+          
+          this.showToast(`✅ ${totalPhotos}장의 사진이 업로드되었습니다!`, 'success');
+          
+          // Reset
+          this.state.selectedPhotos = [];
+          this.updatePhotoPreview();
+          document.getElementById('inp-notes-single').value = '';
+          
+          // Reload today's photos
+          await this.loadTodayPhotos();
+          
+        } catch (e) {
+          console.error('업로드 실패:', e);
+          this.showToast('❌ 업로드 실패: ' + e.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btnText.innerHTML = '<i class="fas fa-cloud-upload-alt text-2xl mr-2"></i>업로드';
+          spinner.classList.add('hidden');
+        }
+      },
+      
+      toggleBeforeAfterMode() {
+        const toggle = document.getElementById('before-after-toggle');
+        const singleMode = document.getElementById('single-photo-mode');
+        const beforeAfterMode = document.getElementById('before-after-mode');
+        
+        if (toggle.checked) {
+          singleMode.classList.add('hidden');
+          beforeAfterMode.classList.remove('hidden');
+          // Reset photos
+          this.state.beforePhoto = null;
+          this.state.afterPhoto = null;
+          this.updateBeforeAfterUI();
+        } else {
+          singleMode.classList.remove('hidden');
+          beforeAfterMode.classList.add('hidden');
+        }
+      },
+      
+      async handleBeforeAfterPhoto(type, input) {
+        if (!input.files || !input.files[0]) return;
+        
+        const file = input.files[0];
+        
+        // 12시간 이내 촬영 검증
+        const isValid = await this.validatePhotoTime(file);
+        if (!isValid) {
+          alert('⚠️ 촬영 시간 제한\n\n12시간 이내에 촬영된 사진만 업로드 가능합니다.\n오래된 사진의 재활용을 방지하기 위한 정책입니다.');
+          input.value = '';
+          return;
+        }
+        
+        // Store photo
+        if (type === 'before') {
+          this.state.beforePhoto = file;
+        } else {
+          this.state.afterPhoto = file;
+        }
+        
+        // Update UI
+        this.updateBeforeAfterUI();
+        input.value = '';
+      },
+      
+      updateBeforeAfterUI() {
+        const beforePreview = document.getElementById('before-photo-preview');
+        const beforePlaceholder = document.getElementById('before-photo-placeholder');
+        const beforeImg = document.getElementById('before-photo-img');
+        
+        const afterPreview = document.getElementById('after-photo-preview');
+        const afterPlaceholder = document.getElementById('after-photo-placeholder');
+        const afterImg = document.getElementById('after-photo-img');
+        
+        const uploadBtn = document.getElementById('btn-submit-before-after');
+        
+        // Update Before
+        if (this.state.beforePhoto) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            beforeImg.src = e.target.result;
+            beforePreview.classList.remove('hidden');
+            beforePlaceholder.classList.add('hidden');
+          };
+          reader.readAsDataURL(this.state.beforePhoto);
+        } else {
+          beforePreview.classList.add('hidden');
+          beforePlaceholder.classList.remove('hidden');
+        }
+        
+        // Update After
+        if (this.state.afterPhoto) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            afterImg.src = e.target.result;
+            afterPreview.classList.remove('hidden');
+            afterPlaceholder.classList.add('hidden');
+          };
+          reader.readAsDataURL(this.state.afterPhoto);
+        } else {
+          afterPreview.classList.add('hidden');
+          afterPlaceholder.classList.remove('hidden');
+        }
+        
+        // Enable upload button only when both photos are ready
+        if (this.state.beforePhoto && this.state.afterPhoto) {
+          uploadBtn.disabled = false;
+        } else {
+          uploadBtn.disabled = true;
+        }
+      },
+      
+      async uploadBeforeAfter() {
+        if (!this.state.beforePhoto || !this.state.afterPhoto) {
+          this.showToast('⚠️ Before와 After 사진을 모두 선택해주세요.', 'error');
+          return;
+        }
+        
+        const btn = document.getElementById('btn-submit-before-after');
+        const spinner = document.getElementById('spinner-before-after');
+        const btnText = document.getElementById('btn-before-after-text');
+        
+        btn.disabled = true;
+        btnText.textContent = '업로드 중...';
+        spinner.classList.remove('hidden');
+        
+        try {
+          const notes = document.getElementById('inp-notes-before-after').value;
+          
+          // Upload Before photo
+          const beforeExt = this.state.beforePhoto.name.split('.').pop() || 'jpg';
+          const beforeFileName = `${this.state.employee.apartment_id}/${Date.now()}_before_${Math.random().toString(36).substr(2, 9)}.${beforeExt}`;
+          
+          const { data: beforeUpload, error: beforeError } = await this.sb.storage
+            .from('cleaning-photos')
+            .upload(beforeFileName, this.state.beforePhoto);
+          
+          if (beforeError) throw beforeError;
+          
+          const { data: { publicUrl: beforeUrl } } = this.sb.storage
+            .from('cleaning-photos')
+            .getPublicUrl(beforeFileName);
+          
+          // Upload After photo
+          const afterExt = this.state.afterPhoto.name.split('.').pop() || 'jpg';
+          const afterFileName = `${this.state.employee.apartment_id}/${Date.now()}_after_${Math.random().toString(36).substr(2, 9)}.${afterExt}`;
+          
+          const { data: afterUpload, error: afterError } = await this.sb.storage
+            .from('cleaning-photos')
+            .upload(afterFileName, this.state.afterPhoto);
+          
+          if (afterError) throw afterError;
+          
+          const { data: { publicUrl: afterUrl } } = this.sb.storage
+            .from('cleaning-photos')
+            .getPublicUrl(afterFileName);
+          
+          // Save to database
+          const groupId = String(Date.now());
+          
+          const payloads = [
+            {
+              employee_name: this.state.employee.name,
+              status: 'completed',
+              location: this.state.workplace.name,
+              apartment_id: this.state.employee.apartment_id,
+              photo_url: beforeUrl,
+              notes: notes || 'Before/After 청소 작업',
+              group_id: groupId,
+              before_after: 'before',
+              upload_type: 'before_after',
+              photo_order: 0,
+              created_at: new Date().toISOString(),
+            },
+            {
+              employee_name: this.state.employee.name,
+              status: 'completed',
+              location: this.state.workplace.name,
+              apartment_id: this.state.employee.apartment_id,
+              photo_url: afterUrl,
+              notes: notes || 'Before/After 청소 작업',
+              group_id: groupId,
+              before_after: 'after',
+              upload_type: 'before_after',
+              photo_order: 1,
+              created_at: new Date().toISOString(),
+            }
+          ];
+          
+          const { error: dbError } = await this.sb.from('cleaning_tasks').insert(payloads);
+          if (dbError) throw dbError;
+          
+          this.showToast('✅ Before/After 청소 작업이 기록되었습니다.');
+          
+          // Reset UI
+          this.state.beforePhoto = null;
+          this.state.afterPhoto = null;
+          document.getElementById('inp-notes-before-after').value = '';
+          this.updateBeforeAfterUI();
+          
+          // Reload today's photos
+          await this.loadTodayPhotos();
+          
+        } catch (e) {
+          console.error('업로드 실패:', e);
+          this.showToast('❌ 업로드 실패: ' + e.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btnText.textContent = '2장 모두 업로드';
+          spinner.classList.add('hidden');
+        }
+      },
+      
+      async validatePhotoTime(file) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const view = new DataView(e.target.result);
+              
+              // Check if JPEG (starts with FFD8)
+              if (view.getUint16(0, false) !== 0xFFD8) {
+                // Not a JPEG, use file modification time
+                const fileTime = file.lastModified;
+                const now = Date.now();
+                const hoursDiff = (now - fileTime) / (1000 * 60 * 60);
+                resolve(hoursDiff <= 12);
+                return;
+              }
+              
+              // Use file modification time (simplified version)
+              const fileTime = file.lastModified;
+              const now = Date.now();
+              const hoursDiff = (now - fileTime) / (1000 * 60 * 60);
+              resolve(hoursDiff <= 12);
+            } catch (err) {
+              console.error('사진 검증 에러:', err);
+              // On error, allow the upload
+              resolve(true);
+            }
+          };
+          reader.readAsArrayBuffer(file);
+        });
+      },
+      
+      async loadTodayPhotos() {
+        const today = new Date().toISOString().split('T')[0];
+        
+        const { data, error } = await this.sb
+          .from('cleaning_tasks')
+          .select('*')
+          .eq('employee_name', this.state.employee.name)
+          .gte('created_at', today + 'T00:00:00')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('사진 로드 실패:', error);
+          return;
+        }
+        
+        // Store photos for viewer
+        this.state.todayPhotos = data || [];
+        
+        const container = document.getElementById('today-photos');
+        
+        if (!data || data.length === 0) {
+          container.innerHTML = `
+            <div class="col-span-3 text-center text-gray-400 py-8">
+              <i class="fas fa-images text-4xl mb-2"></i>
+              <div>사진이 없습니다</div>
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = data.map((photo, index) => {
+          const time = new Date(photo.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+          const badge = photo.before_after === 'before' ? 'Before' : photo.before_after === 'after' ? 'After' : '';
+          const badgeColor = photo.before_after === 'before' ? 'bg-blue-500' : 'bg-green-500';
+          
+          return `
+            <div onclick="app.openPhotoViewer(${index})" class="relative aspect-square rounded-lg overflow-hidden shadow-md cursor-pointer hover:opacity-80 transition">
+              <img src="${photo.photo_url}" class="w-full h-full object-cover">
+              ${badge ? `<div class="${badgeColor} text-white text-xs font-bold px-2 py-1 absolute top-1 left-1 rounded">${badge}</div>` : ''}
+              <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-2 py-1">${time}</div>
+            </div>
+          `;
+        }).join('');
+      },
+      
+      // 사진 뷰어
+      openPhotoViewer(index) {
+        this.state.currentPhotoIndex = index;
+        document.getElementById('photo-viewer-modal').classList.remove('hidden');
+        this.updatePhotoViewer();
+        
+        // PC에서 키보드 네비게이션 지원
+        this.photoViewerKeyHandler = (e) => {
+          if (e.key === 'ArrowLeft') this.viewerPrevPhoto();
+          else if (e.key === 'ArrowRight') this.viewerNextPhoto();
+          else if (e.key === 'Escape') this.closePhotoViewer();
+        };
+        document.addEventListener('keydown', this.photoViewerKeyHandler);
+      },
+      
+      closePhotoViewer() {
+        document.getElementById('photo-viewer-modal').classList.add('hidden');
+        if (this.photoViewerKeyHandler) {
+          document.removeEventListener('keydown', this.photoViewerKeyHandler);
+          this.photoViewerKeyHandler = null;
+        }
+      },
+      
+      viewerPrevPhoto() {
+        if (this.state.currentPhotoIndex > 0) {
+          this.state.currentPhotoIndex--;
+          this.updatePhotoViewer();
+        }
+      },
+      
+      viewerNextPhoto() {
+        if (this.state.currentPhotoIndex < this.state.todayPhotos.length - 1) {
+          this.state.currentPhotoIndex++;
+          this.updatePhotoViewer();
+        }
+      },
+      
+      updatePhotoViewer() {
+        const photos = this.state.todayPhotos;
+        const index = this.state.currentPhotoIndex;
+        const photo = photos[index];
+        
+        // 메인 이미지
+        document.getElementById('viewer-main-image').src = photo.photo_url;
+        
+        // 카운트
+        document.getElementById('viewer-photo-count').textContent = `${index + 1} / ${photos.length}`;
+        
+        // 시간
+        const time = new Date(photo.created_at).toLocaleString('ko-KR');
+        document.getElementById('viewer-photo-time').textContent = time;
+        
+        // 썸네일
+        const thumbnails = document.getElementById('viewer-thumbnails');
+        thumbnails.innerHTML = photos.map((p, i) => `
+          <div onclick="app.openPhotoViewer(${i})" class="flex-shrink-0 h-full aspect-square rounded-lg overflow-hidden cursor-pointer ${i === index ? 'ring-4 ring-blue-500 scale-110' : 'opacity-60 hover:opacity-100 hover:scale-105'} transition-all duration-200">
+            <img src="${p.photo_url}" class="w-full h-full object-cover">
+          </div>
+        `).join('');
+        
+        // 현재 썸네일로 스크롤
+        const currentThumbnail = thumbnails.children[index];
+        if (currentThumbnail) {
+          currentThumbnail.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      },
+      
+      
+      // ==================== 출퇴근 캘린더 시스템 ====================
+      openCalendar() {
+        this.state.calendarYear = new Date().getFullYear();
+        this.state.calendarMonth = new Date().getMonth();
+        document.getElementById('calendar-modal').classList.remove('hidden');
+        this.loadMonthData();
+      },
+      
+      closeCalendar() {
+        document.getElementById('calendar-modal').classList.add('hidden');
+      },
+      
+      prevMonth() {
+        this.state.calendarMonth--;
+        if (this.state.calendarMonth < 0) {
+          this.state.calendarMonth = 11;
+          this.state.calendarYear--;
+        }
+        this.loadMonthData();
+      },
+      
+      nextMonth() {
+        this.state.calendarMonth++;
+        if (this.state.calendarMonth > 11) {
+          this.state.calendarMonth = 0;
+          this.state.calendarYear++;
+        }
+        this.loadMonthData();
+      },
+      
+      async loadMonthData() {
+        try {
+          const year = this.state.calendarYear;
+          const month = this.state.calendarMonth;
+          
+          // 월 제목 업데이트
+          document.getElementById('calendar-month-title').textContent = 
+            `${year}년 ${month + 1}월`;
+          
+          // 해당 월의 첫날과 마지막날
+          const firstDay = new Date(year, month, 1);
+          const lastDay = new Date(year, month + 1, 0);
+          
+          // 해당 월의 출퇴근 기록 가져오기
+          const { data, error } = await this.sb
+            .from('attendance_records')
+            .select('*')
+            .eq('employee_id', this.state.employee.id)
+            .gte('created_at', firstDay.toISOString())
+            .lte('created_at', lastDay.toISOString())
+            .order('created_at', { ascending: true });
+          
+          if (error) throw error;
+          
+          this.state.attendanceRecords = data || [];
+          
+          // 캘린더 렌더링
+          this.renderCalendar();
+          this.calculateMonthStats();
+        } catch (error) {
+          console.error('월별 데이터 로드 실패:', error);
+          this.showToast('캘린더 로드에 실패했습니다', 'error');
+        }
+      },
+      
+      renderCalendar() {
+        const year = this.state.calendarYear;
+        const month = this.state.calendarMonth;
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        
+        // 해당 월의 첫날과 마지막날
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const firstDayOfWeek = firstDay.getDay(); // 0=일요일
+        
+        // 날짜별 기록 그룹화
+        const recordsByDate = {};
+        this.state.attendanceRecords.forEach(record => {
+          const date = record.created_at.split('T')[0];
+          if (!recordsByDate[date]) recordsByDate[date] = [];
+          recordsByDate[date].push(record);
+        });
+        
+        const grid = document.getElementById('calendar-grid');
+        grid.innerHTML = '';
+        
+        // 빈 셀 추가 (이전 달)
+        for (let i = 0; i < firstDayOfWeek; i++) {
+          grid.innerHTML += '<div class="aspect-square"></div>';
+        }
+        
+        // 날짜 셀 추가
+        for (let day = 1; day <= daysInMonth; day++) {
+          const date = new Date(year, month, day);
+          const dateStr = date.toISOString().split('T')[0];
+          const isToday = dateStr === todayStr;
+          const records = recordsByDate[dateStr] || [];
+          
+          // 출근/퇴근 확인
+          const hasCheckIn = records.some(r => r.attendance_type === '출근');
+          const hasCheckOut = records.some(r => r.attendance_type === '퇴근');
+          
+          let bgColor = 'bg-gray-100';
+          let textColor = 'text-gray-400';
+          
+          if (hasCheckIn && hasCheckOut) {
+            bgColor = 'bg-green-100';
+            textColor = 'text-green-700';
+          } else if (hasCheckIn) {
+            bgColor = 'bg-orange-100';
+            textColor = 'text-orange-700';
+          }
+          
+          const borderClass = isToday ? 'ring-2 ring-blue-500' : '';
+          
+          // 근무 시간 계산
+          let workHours = '';
+          if (hasCheckIn && hasCheckOut) {
+            const checkInRecord = records.find(r => r.attendance_type === '출근');
+            const checkOutRecord = records.find(r => r.attendance_type === '퇴근');
+            const checkInTime = new Date(checkInRecord.created_at);
+            const checkOutTime = new Date(checkOutRecord.created_at);
+            const diff = (checkOutTime - checkInTime) / (1000 * 60 * 60);
+            workHours = `<div class="text-xs mt-1">${diff.toFixed(1)}h</div>`;
+          }
+          
+          grid.innerHTML += `
+            <div class="${bgColor} ${borderClass} rounded-lg p-2 aspect-square flex flex-col items-center justify-center cursor-pointer hover:opacity-80 transition"
+                 onclick="app.showDayDetail('${dateStr}')">
+              <div class="font-bold ${textColor}">${day}</div>
+              ${workHours}
+              ${records.length > 0 ? `<div class="text-xs text-gray-500 mt-1">${records.length}건</div>` : ''}
+            </div>
+          `;
+        }
+      },
+      
+      calculateMonthStats() {
+        const records = this.state.attendanceRecords;
+        
+        // 날짜별 그룹화
+        const dayRecords = {};
+        records.forEach(record => {
+          const date = record.created_at.split('T')[0];
+          if (!dayRecords[date]) dayRecords[date] = [];
+          dayRecords[date].push(record);
+        });
+        
+        // 근무일 수
+        const workDays = Object.keys(dayRecords).filter(date => {
+          const dayRecs = dayRecords[date];
+          return dayRecs.some(r => r.attendance_type === '출근');
+        }).length;
+        
+        // 총 근무시간 및 휴게시간
+        let totalHours = 0;
+        let totalBreakMinutes = 0;
+        
+        Object.values(dayRecords).forEach(dayRecs => {
+          const checkIn = dayRecs.find(r => r.attendance_type === '출근');
+          const checkOut = dayRecs.find(r => r.attendance_type === '퇴근');
+          
+          if (checkIn && checkOut) {
+            const diff = (new Date(checkOut.created_at) - new Date(checkIn.created_at)) / (1000 * 60 * 60);
+            totalHours += diff;
+          }
+          
+          // 휴게시간 계산
+          const breakStart = dayRecs.find(r => r.attendance_type === '휴게 시작');
+          const breakEnd = dayRecs.find(r => r.attendance_type === '휴게 종료');
+          
+          if (breakStart && breakEnd) {
+            const breakDiff = (new Date(breakEnd.created_at) - new Date(breakStart.created_at)) / (1000 * 60);
+            totalBreakMinutes += breakDiff;
+          }
+        });
+        
+        // 평균 근무시간
+        const avgHours = workDays > 0 ? totalHours / workDays : 0;
+        
+        // UI 업데이트
+        document.getElementById('stat-work-days').textContent = workDays;
+        document.getElementById('stat-total-hours').textContent = totalHours.toFixed(1) + 'h';
+        document.getElementById('stat-avg-hours').textContent = avgHours.toFixed(1) + 'h';
+        document.getElementById('stat-break-hours').textContent = (totalBreakMinutes / 60).toFixed(1) + 'h';
+      },
+      
+      showDayDetail(dateStr) {
+        const records = this.state.attendanceRecords.filter(r => 
+          r.created_at.split('T')[0] === dateStr
+        );
+        
+        if (records.length === 0) {
+          this.showToast('해당 날짜에 기록이 없습니다', 'info');
+          return;
+        }
+        
+        // 상세 정보 표시 (간단한 alert, 나중에 모달로 개선 가능)
+        const details = records.map(r => {
+          const time = new Date(r.created_at).toLocaleTimeString('ko-KR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+          return `${r.attendance_type}: ${time}`;
+        }).join('\n');
+        
+        alert(`📅 ${dateStr}\n\n${details}`);
+      },
+      
+      // ==================== 구매 요청 시스템 ====================
+      async loadPurchaseBadge() {
+        try {
+          if (!this.state.employee || !this.state.employee.id) return;
+          
+          const employeeId = this.state.employee.id;
+          const employeeName = this.state.employee.name;
+          
+          const { data, error } = await this.sb
+            .from('purchases')
+            .select('id, status')
+            .or(`requester_name.eq.${employeeName},requester_employee_id.eq.${employeeId}`)
+            .eq('status', 'approved');
+          
+          if (error) {
+            console.error('구매 배지 로드 실패:', error);
+            return;
+          }
+          
+          const pendingCount = (data || []).length;
+          const badge = document.getElementById('purchase-badge');
+          
+          if (pendingCount > 0) {
+            badge.textContent = pendingCount;
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+          }
+          
+          // Update pending inspections list
+          const container = document.getElementById('pending-inspections');
+          if (pendingCount === 0) {
+            container.innerHTML = `
+              <div class="text-center text-gray-400 py-8">
+                <i class="fas fa-clipboard-check text-4xl mb-2"></i>
+                <div>검수 대기 항목이 없습니다</div>
+              </div>
+            `;
+          } else {
+            // Load full purchase data for pending items
+            const { data: purchases } = await this.sb
+              .from('purchases')
+              .select('*, purchase_items(*)')
+              .or(`requester_name.eq.${employeeName},requester_employee_id.eq.${employeeId}`)
+              .eq('status', 'approved')
+              .order('created_at', { ascending: false });
+            
+            container.innerHTML = (purchases || []).map(p => {
+              const itemCount = (p.purchase_items || []).length;
+              const itemText = itemCount > 0 ? `${p.purchase_items[0].item_name}${itemCount > 1 ? ` 외 ${itemCount - 1}건` : ''}` : '항목 없음';
+              
+              return `
+                <div class="bg-orange-50 border-l-4 border-orange-500 p-4 rounded">
+                  <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                      <h4 class="font-bold text-gray-800">${itemText}</h4>
+                      <p class="text-xs text-gray-500 mt-1">${new Date(p.created_at).toLocaleDateString('ko-KR')}</p>
+                    </div>
+                    <span class="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">검수 대기</span>
+                  </div>
+                  <div class="text-sm text-gray-600 mb-3">
+                    <span>예상 금액: <span class="font-medium text-indigo-600">₩${parseFloat(p.total_amount).toLocaleString('ko-KR')}</span></span>
+                  </div>
+                  <button onclick="app.openInspection('${p.id}')" class="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm font-medium">
+                    <i class="fas fa-camera mr-2"></i>검수하기
+                  </button>
+                </div>
+              `;
+            }).join('');
+          }
+        } catch (err) {
+          console.error('❌ 구매 배지 로드 실패:', err);
+        }
+      },
+      
+      async showMyPurchases() {
+        if (!this.state.employee || !this.state.employee.id) {
+          this.showToast('⚠️ 직원 정보를 찾을 수 없습니다', 'error');
+          return;
+        }
+
+        document.getElementById('purchase-modal').classList.remove('hidden');
+        this.switchPurchaseTab('pending');
+        await this.loadMyPurchases();
+      },
+
+      async loadMyPurchases() {
+        try {
+          const loadingEl = document.getElementById('loading-purchases');
+          if (loadingEl) {
+            loadingEl.classList.remove('hidden');
+          }
+          
+          const employeeId = this.state.employee.id;
+          const employeeName = this.state.employee.name;
+          
+          const { data, error } = await this.sb
+            .from('purchases')
+            .select(`
+              *,
+              purchase_items(*),
+              purchase_photos(*)
+            `)
+            .or(`requester_name.eq.${employeeName},requester_employee_id.eq.${employeeId}`)
+            .order('created_at', { ascending: false });
+          
+          if (error) throw error;
+          
+          this.state.myPurchases = data || [];
+          
+          const pendingCount = data.filter(p => p.status === 'approved').length;
+          const badge = document.getElementById('purchase-badge');
+          if (badge) {
+            if (pendingCount > 0) {
+              badge.textContent = pendingCount;
+              badge.classList.remove('hidden');
+            } else {
+              badge.classList.add('hidden');
+            }
+          }
+          
+          const countPending = document.getElementById('count-pending');
+          const countAll = document.getElementById('count-all');
+          if (countPending) countPending.textContent = pendingCount;
+          if (countAll) countAll.textContent = data.length;
+          
+          this.renderPurchaseList();
+          
+          if (loadingEl) {
+            loadingEl.classList.add('hidden');
+          }
+        } catch (err) {
+          console.error('❌ 구매 요청 로드 실패:', err);
+          const loadingEl = document.getElementById('loading-purchases');
+          if (loadingEl) {
+            loadingEl.innerHTML = `
+              <div class="text-center py-8">
+                <i class="fas fa-exclamation-triangle text-4xl text-red-500"></i>
+                <p class="mt-4 text-red-600">구매 요청을 불러올 수 없습니다</p>
+              </div>
+            `;
+          }
+        }
+      },
+
+      switchPurchaseTab(tab) {
+        document.querySelectorAll('#purchase-modal button[id^="tab-"]').forEach(btn => {
+          btn.classList.remove('text-indigo-600', 'border-indigo-600');
+          btn.classList.add('text-gray-600', 'border-transparent');
+        });
+        
+        const activeTab = document.getElementById(`tab-${tab}`);
+        activeTab.classList.remove('text-gray-600', 'border-transparent');
+        activeTab.classList.add('text-indigo-600', 'border-indigo-600');
+        
+        this.state.currentPurchaseTab = tab;
+        this.renderPurchaseList();
+      },
+
+      renderPurchaseList() {
+        const container = document.getElementById('purchase-list');
+        const tab = this.state.currentPurchaseTab || 'pending';
+        
+        let filtered = this.state.myPurchases || [];
+        
+        if (tab === 'pending') {
+          filtered = filtered.filter(p => p.status === 'approved');
+        }
+        
+        if (filtered.length === 0) {
+          const message = tab === 'pending' ? '검수 대기 중인 구매 요청이 없습니다' : '구매 요청 내역이 없습니다';
+          container.innerHTML = `
+            <div class="text-center py-12">
+              <i class="fas fa-inbox text-6xl text-gray-300"></i>
+              <p class="mt-4 text-gray-500">${message}</p>
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = filtered.map(p => {
+          const statusBadge = {
+            pending: '<span class="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">승인 대기</span>',
+            approved: '<span class="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">검수 대기</span>',
+            rejected: '<span class="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">반려됨</span>',
+            completed: '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">완료</span>'
+          }[p.status];
+          
+          const itemCount = (p.purchase_items || []).length;
+          const itemText = itemCount > 0 ? `${p.purchase_items[0].item_name}${itemCount > 1 ? ` 외 ${itemCount - 1}건` : ''}` : '항목 없음';
+          
+          const canInspect = p.status === 'approved';
+          
+          return `
+            <div class="bg-white border rounded-xl p-4 mb-3 hover:shadow-md transition-shadow ${p.status === 'completed' ? 'cursor-pointer' : ''}" ${p.status === 'completed' ? `onclick="app.showPurchaseDetailModal('${p.id}')"` : ''}>
+              <div class="flex justify-between items-start mb-3">
+                <div class="flex-1">
+                  <h4 class="font-bold text-gray-800">${itemText}</h4>
+                  <p class="text-xs text-gray-500 mt-1">${new Date(p.created_at).toLocaleDateString('ko-KR')}</p>
+                </div>
+                ${statusBadge}
+              </div>
+              <div class="text-sm text-gray-600 mb-3">
+                <div class="flex justify-between">
+                  <span>예상 금액:</span>
+                  <span class="font-medium text-indigo-600">₩${parseFloat(p.total_amount).toLocaleString('ko-KR')}</span>
+                </div>
+                ${p.actual_amount ? `
+                  <div class="flex justify-between mt-1">
+                    <span>실제 금액:</span>
+                    <span class="font-medium text-green-600">₩${parseFloat(p.actual_amount).toLocaleString('ko-KR')}</span>
+                  </div>
+                ` : ''}
+                ${p.status === 'completed' ? `
+                  <div class="mt-2 text-xs text-blue-600 flex items-center gap-1">
+                    <i class="fas fa-info-circle"></i>
+                    <span>클릭하여 상세 정보 보기</span>
+                  </div>
+                ` : ''}
+              </div>
+              ${canInspect ? `
+                <button onclick="event.stopPropagation(); app.openInspection('${p.id}')" class="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm font-medium">
+                  <i class="fas fa-camera mr-2"></i>검수하기
+                </button>
+              ` : ''}
+              ${p.status === 'rejected' && p.rejection_reason ? `
+                <div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                  <i class="fas fa-info-circle mr-1"></i>${p.rejection_reason}
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+      },
+
+      closePurchaseModal() {
+        document.getElementById('purchase-modal').classList.add('hidden');
+      },
+
+      async openInspection(purchaseId) {
+        try {
+          // 먼저 myPurchases에서 찾고, 없으면 DB에서 직접 조회
+          let purchase = this.state.myPurchases?.find(p => p.id === purchaseId);
+          
+          if (!purchase) {
+            console.log('🔍 myPurchases에서 찾을 수 없음, DB에서 조회 시도...');
+            
+            // DB에서 직접 조회
+            const { data, error } = await this.sb
+              .from('purchases')
+              .select(`
+                *,
+                purchase_items(*)
+              `)
+              .eq('id', purchaseId)
+              .single();
+            
+            if (error || !data) {
+              console.error('❌ DB 조회 실패:', error);
+              this.showToast('❌ 구매 요청을 찾을 수 없습니다', 'error');
+              return;
+            }
+            
+            purchase = data;
+            console.log('✅ DB에서 구매 요청 조회 성공:', purchase);
+          }
+          
+          this.state.currentInspection = purchase;
+          
+          const infoContainer = document.getElementById('inspection-purchase-info');
+          infoContainer.innerHTML = `
+            <div class="flex justify-between">
+              <span class="text-gray-600">물품:</span>
+              <span class="font-medium">${purchase.purchase_items.map(i => i.item_name).join(', ')}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">요청일:</span>
+              <span class="font-medium">${new Date(purchase.created_at).toLocaleDateString('ko-KR')}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">예상 금액:</span>
+              <span class="font-medium text-indigo-600">₩${parseFloat(purchase.total_amount).toLocaleString('ko-KR')}</span>
+            </div>
+          `;
+          
+          // 물품 목록 표시
+          const itemsContent = document.getElementById('inspection-items-content');
+          if (purchase.purchase_items && purchase.purchase_items.length > 0) {
+            itemsContent.innerHTML = purchase.purchase_items.map((item, idx) => `
+              <div class="flex items-center gap-2 text-sm">
+                <span class="w-6 h-6 flex items-center justify-center bg-blue-600 text-white rounded-full text-xs font-bold shrink-0">${idx + 1}</span>
+                <span class="font-medium text-gray-800">${item.item_name || '(미입력)'}</span>
+                <span class="text-gray-600">(${item.quantity || 0}개)</span>
+                ${item.category ? `<span class="text-xs px-2 py-0.5 bg-gray-200 rounded">${item.category}</span>` : ''}
+              </div>
+            `).join('');
+          } else {
+            itemsContent.innerHTML = '<p class="text-sm text-gray-500">등록된 물품이 없습니다</p>';
+          }
+          
+          document.getElementById('inspection-photos').value = '';
+          document.getElementById('inspection-photo-preview').innerHTML = '';
+          document.getElementById('inspection-photo-notes').innerHTML = '';
+          document.getElementById('inspection-photo-preview').classList.add('hidden');
+          document.getElementById('inspection-photo-notes').classList.add('hidden');
+          document.getElementById('inspection-actual-amount').value = '';
+          document.getElementById('inspection-notes').value = '';
+          
+          // 사진 선택 시 미리보기 + 드롭다운 생성
+          document.getElementById('inspection-photos').onchange = (e) => {
+            const files = Array.from(e.target.files).slice(0, 10);
+            const preview = document.getElementById('inspection-photo-preview');
+            const notesContainer = document.getElementById('inspection-photo-notes');
+            
+            if (files.length === 0) {
+              preview.classList.add('hidden');
+              notesContainer.classList.add('hidden');
+              preview.innerHTML = '';
+              notesContainer.innerHTML = '';
+              return;
+            }
+            
+            preview.classList.remove('hidden');
+            preview.innerHTML = '';
+            notesContainer.classList.remove('hidden');
+            
+            // 드롭다운 옵션 생성
+            const items = purchase.purchase_items || [];
+            const itemOptions = items.map(item => {
+              const name = item.item_name || '(미입력)';
+              const qty = item.quantity || 0;
+              const category = item.category || '';
+              return `<option value="${item.id}">${name} (${qty}개)${category ? ' - ' + category : ''}</option>`;
+            }).join('');
+            
+            let notesHTML = '<div class="space-y-3">';
+            
+            files.forEach((file, i) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const div = document.createElement('div');
+                div.className = 'relative';
+                div.innerHTML = `
+                  <img src="${e.target.result}" class="w-full h-24 object-cover rounded-lg border">
+                  <div class="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-2 py-0.5 rounded">${i + 1}</div>
+                `;
+                preview.appendChild(div);
+              };
+              reader.readAsDataURL(file);
+              
+              // 각 사진별 드롭다운 + 메모
+              notesHTML += `
+                <div class="bg-white border-2 border-gray-200 rounded-lg p-4 space-y-3">
+                  <div class="flex items-center gap-2">
+                    <span class="w-6 h-6 flex items-center justify-center bg-green-600 text-white rounded-full text-xs font-bold shrink-0">${i + 1}</span>
+                    <span class="text-sm font-bold text-gray-700">사진 ${i + 1}</span>
+                  </div>
+                  
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">
+                      <i class="fas fa-box mr-1"></i>이 사진은 어떤 물품인가요? <span class="text-red-500">*</span>
+                    </label>
+                    <select 
+                      id="inspection-photo-item-${i}" 
+                      class="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      required
+                    >
+                      <option value="">선택하세요</option>
+                      ${itemOptions}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">
+                      <i class="fas fa-sticky-note mr-1"></i>메모 (선택사항)
+                    </label>
+                    <input 
+                      type="text" 
+                      id="inspection-photo-note-${i}" 
+                      placeholder="예: 검수 완료, 상태 양호" 
+                      class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    >
+                  </div>
+                </div>
+              `;
+            });
+            
+            notesHTML += '</div>';
+            notesContainer.innerHTML = notesHTML;
+          };
+          
+          document.getElementById('inspection-modal').classList.remove('hidden');
+        } catch (err) {
+          console.error('❌ 검수 모달 열기 실패:', err);
+          this.showToast('❌ 오류가 발생했습니다', 'error');
+        }
+      },
+
+      closeInspectionModal() {
+        document.getElementById('inspection-modal').classList.add('hidden');
+      },
+
+      async showPurchaseDetailModal(purchaseId) {
+        try {
+          // DB에서 상세 정보 조회
+          const { data: purchase, error } = await this.sb
+            .from('purchases')
+            .select(`
+              *,
+              purchase_items(*),
+              purchase_photos(*)
+            `)
+            .eq('id', purchaseId)
+            .single();
+          
+          if (error || !purchase) {
+            console.error('❌ 구매 요청 조회 실패:', error);
+            this.showToast('❌ 구매 요청을 찾을 수 없습니다', 'error');
+            return;
+          }
+          
+          console.log('✅ 구매 요청 조회 성공:', purchase);
+          
+          // 상세 정보 HTML 생성
+          const content = document.getElementById('purchase-detail-content');
+          
+          const statusBadge = {
+            pending: '<span class="px-3 py-1 text-sm font-medium bg-yellow-100 text-yellow-800 rounded-full">승인 대기</span>',
+            approved: '<span class="px-3 py-1 text-sm font-medium bg-orange-100 text-orange-800 rounded-full">검수 대기</span>',
+            rejected: '<span class="px-3 py-1 text-sm font-medium bg-red-100 text-red-800 rounded-full">반려됨</span>',
+            completed: '<span class="px-3 py-1 text-sm font-medium bg-green-100 text-green-800 rounded-full">완료</span>'
+          }[purchase.status] || '';
+          
+          content.innerHTML = `
+            <!-- 기본 정보 -->
+            <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 mb-4">
+              <div class="flex justify-between items-center mb-3">
+                <h4 class="text-lg font-bold text-gray-800">기본 정보</h4>
+                ${statusBadge}
+              </div>
+              <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                  <span class="text-gray-600">요청일:</span>
+                  <span class="font-medium">${new Date(purchase.created_at).toLocaleString('ko-KR')}</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-600">요청자:</span>
+                  <span class="font-medium">${purchase.requester_name || '(미입력)'}</span>
+                </div>
+                ${purchase.reason ? `
+                  <div class="mt-2">
+                    <span class="text-gray-600">요청 사유:</span>
+                    <p class="mt-1 text-gray-800 bg-white rounded p-2">${purchase.reason}</p>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+            
+            <!-- 금액 정보 -->
+            <div class="bg-blue-50 rounded-lg p-4 mb-4">
+              <h4 class="text-sm font-bold text-gray-800 mb-3">💰 금액 정보</h4>
+              <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                  <span class="text-gray-600">예상 금액:</span>
+                  <span class="font-bold text-indigo-600">₩${parseFloat(purchase.total_amount).toLocaleString('ko-KR')}</span>
+                </div>
+                ${purchase.actual_amount ? `
+                  <div class="flex justify-between">
+                    <span class="text-gray-600">실제 금액:</span>
+                    <span class="font-bold text-green-600">₩${parseFloat(purchase.actual_amount).toLocaleString('ko-KR')}</span>
+                  </div>
+                  <div class="flex justify-between pt-2 border-t border-blue-200">
+                    <span class="text-gray-600">차액:</span>
+                    <span class="font-bold ${purchase.actual_amount - purchase.total_amount > 0 ? 'text-red-600' : 'text-green-600'}">
+                      ${purchase.actual_amount - purchase.total_amount > 0 ? '+' : ''}₩${(purchase.actual_amount - purchase.total_amount).toLocaleString('ko-KR')}
+                    </span>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+            
+            <!-- 물품 목록 -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+              <h4 class="text-sm font-bold text-gray-800 mb-3">📦 물품 목록</h4>
+              ${(purchase.purchase_items || []).length > 0 ? `
+                <div class="space-y-2">
+                  ${purchase.purchase_items.map((item, idx) => `
+                    <div class="bg-white rounded-lg p-3 flex items-center gap-3">
+                      <span class="w-6 h-6 flex items-center justify-center bg-purple-600 text-white rounded-full text-xs font-bold shrink-0">${idx + 1}</span>
+                      <div class="flex-1">
+                        <div class="font-medium text-gray-800">${item.item_name || '(미입력)'}</div>
+                        <div class="text-xs text-gray-500 mt-1">
+                          수량: ${item.quantity || 0}개
+                          ${item.unit_price ? ` | 단가: ₩${parseFloat(item.unit_price).toLocaleString('ko-KR')}` : ''}
+                          ${item.category ? ` | ${item.category}` : ''}
+                        </div>
+                      </div>
+                      ${item.unit_price && item.quantity ? `
+                        <div class="text-right">
+                          <div class="text-sm font-bold text-indigo-600">
+                            ₩${(parseFloat(item.unit_price) * parseInt(item.quantity)).toLocaleString('ko-KR')}
+                          </div>
+                        </div>
+                      ` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              ` : '<p class="text-sm text-gray-500 text-center py-4">등록된 물품이 없습니다</p>'}
+            </div>
+            
+            <!-- 검수 사진 -->
+            ${purchase.status === 'completed' && (purchase.purchase_photos || []).length > 0 ? `
+              <div class="bg-green-50 rounded-lg p-4 mb-4">
+                <h4 class="text-sm font-bold text-gray-800 mb-3">📷 검수 사진 (${(purchase.purchase_photos || []).length}장)</h4>
+                ${(() => {
+                  // 물품별로 사진 그룹화
+                  const itemPhotos = {};
+                  const unmatchedPhotos = [];
+                  
+                  (purchase.purchase_photos || []).forEach(photo => {
+                    if (photo.purchase_item_id) {
+                      if (!itemPhotos[photo.purchase_item_id]) {
+                        itemPhotos[photo.purchase_item_id] = [];
+                      }
+                      itemPhotos[photo.purchase_item_id].push(photo);
+                    } else {
+                      unmatchedPhotos.push(photo);
+                    }
+                  });
+                  
+                  let html = '';
+                  
+                  // 물품별 그룹 표시
+                  (purchase.purchase_items || []).forEach(item => {
+                    const photos = itemPhotos[item.id] || [];
+                    if (photos.length > 0) {
+                      html += `
+                        <div class="mb-3 bg-white rounded-lg p-3">
+                          <div class="flex items-center gap-2 mb-2">
+                            <i class="fas fa-box text-purple-600"></i>
+                            <span class="text-sm font-bold text-gray-800">${item.item_name || '(미입력)'}</span>
+                            <span class="text-xs text-gray-600">(${photos.length}장)</span>
+                          </div>
+                          <div class="grid grid-cols-3 gap-2">
+                            ${photos.map(p => `
+                              <div class="relative group">
+                                <img src="${p.photo_url}" class="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-80 border-2 border-green-200" onclick="window.open('${p.photo_url}', '_blank')">
+                                ${p.note ? `<div class="absolute bottom-1 left-1 right-1 bg-black/70 text-white text-xs px-2 py-1 rounded truncate">${p.note}</div>` : ''}
+                              </div>
+                            `).join('')}
+                          </div>
+                        </div>
+                      `;
+                    }
+                  });
+                  
+                  // 매칭되지 않은 사진
+                  if (unmatchedPhotos.length > 0) {
+                    html += `
+                      <div class="mb-3 bg-white rounded-lg p-3">
+                        <div class="flex items-center gap-2 mb-2">
+                          <i class="fas fa-images text-gray-600"></i>
+                          <span class="text-sm font-bold text-gray-800">기타 사진</span>
+                          <span class="text-xs text-gray-600">(${unmatchedPhotos.length}장)</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                          ${unmatchedPhotos.map(p => `
+                            <div class="relative group">
+                              <img src="${p.photo_url}" class="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-80 border-2 border-gray-200" onclick="window.open('${p.photo_url}', '_blank')">
+                              ${p.note ? `<div class="absolute bottom-1 left-1 right-1 bg-black/70 text-white text-xs px-2 py-1 rounded truncate">${p.note}</div>` : ''}
+                            </div>
+                          `).join('')}
+                        </div>
+                      </div>
+                    `;
+                  }
+                  
+                  return html || '<p class="text-sm text-gray-500 text-center py-4">등록된 사진이 없습니다</p>';
+                })()}
+              </div>
+            ` : ''}
+            
+            <!-- 검수 정보 -->
+            ${purchase.status === 'completed' ? `
+              <div class="bg-emerald-50 rounded-lg p-4">
+                <h4 class="text-sm font-bold text-gray-800 mb-3">✅ 검수 정보</h4>
+                <div class="space-y-2 text-sm">
+                  ${purchase.inspected_by ? `
+                    <div class="flex justify-between">
+                      <span class="text-gray-600">검수자:</span>
+                      <span class="font-medium">${purchase.inspected_by}</span>
+                    </div>
+                  ` : ''}
+                  ${purchase.inspected_at ? `
+                    <div class="flex justify-between">
+                      <span class="text-gray-600">검수일:</span>
+                      <span class="font-medium">${new Date(purchase.inspected_at).toLocaleString('ko-KR')}</span>
+                    </div>
+                  ` : ''}
+                  ${purchase.inspection_notes ? `
+                    <div class="mt-2">
+                      <span class="text-gray-600">검수 메모:</span>
+                      <p class="mt-1 text-gray-800 bg-white rounded p-2">${purchase.inspection_notes}</p>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            ` : ''}
+            
+            <!-- 반려 사유 -->
+            ${purchase.status === 'rejected' && purchase.rejection_reason ? `
+              <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h4 class="text-sm font-bold text-red-800 mb-2">❌ 반려 사유</h4>
+                <p class="text-sm text-red-700">${purchase.rejection_reason}</p>
+              </div>
+            ` : ''}
+          `;
+          
+          // 모달 열기
+          document.getElementById('purchase-detail-modal').classList.remove('hidden');
+          
+        } catch (err) {
+          console.error('❌ 상세 정보 조회 실패:', err);
+          this.showToast('❌ 상세 정보를 불러올 수 없습니다', 'error');
+        }
+      },
+
+      closePurchaseDetailModal() {
+        document.getElementById('purchase-detail-modal').classList.add('hidden');
+      },
+
+      // ==================== 🔐 비밀번호 변경 ====================
+      openPasswordModal() {
+        document.getElementById('password-change-modal').classList.remove('hidden');
+        // 입력 필드 초기화
+        document.getElementById('current-password-input').value = '';
+        document.getElementById('new-password-input').value = '';
+        document.getElementById('confirm-password-input').value = '';
+      },
+
+      closePasswordModal() {
+        document.getElementById('password-change-modal').classList.add('hidden');
+      },
+
+      async submitPasswordChange() {
+        const currentPassword = document.getElementById('current-password-input').value.trim();
+        const newPassword = document.getElementById('new-password-input').value.trim();
+        const confirmPassword = document.getElementById('confirm-password-input').value.trim();
+
+        // 입력 검증
+        if (!currentPassword || !newPassword || !confirmPassword) {
+          this.showToast('⚠️ 모든 필드를 입력하세요', 'error');
+          return;
+        }
+
+        if (newPassword.length < 4) {
+          this.showToast('⚠️ 새 비밀번호는 최소 4자리 이상이어야 합니다', 'error');
+          return;
+        }
+
+        if (newPassword !== confirmPassword) {
+          this.showToast('⚠️ 새 비밀번호가 일치하지 않습니다', 'error');
+          return;
+        }
+
+        try {
+          // 현재 비밀번호 확인
+          const { data: emp, error: fetchError } = await this.sb
+            .from('employees')
+            .select('login_password')
+            .eq('id', this.state.employee.id)
+            .single();
+
+          if (fetchError || !emp) {
+            this.showToast('❌ 직원 정보를 찾을 수 없습니다', 'error');
+            return;
+          }
+
+          if (emp.login_password !== currentPassword) {
+            this.showToast('❌ 현재 비밀번호가 일치하지 않습니다', 'error');
+            return;
+          }
+
+          // 비밀번호 변경
+          const { error: updateError } = await this.sb
+            .from('employees')
+            .update({
+              login_password: newPassword,
+              password_changed_at: new Date().toISOString(),
+              force_password_change: false
+            })
+            .eq('id', this.state.employee.id);
+
+          if (updateError) {
+            console.error('비밀번호 변경 실패:', updateError);
+            this.showToast('❌ 비밀번호 변경에 실패했습니다', 'error');
+            return;
+          }
+
+          this.showToast('✅ 비밀번호가 성공적으로 변경되었습니다!', 'success');
+          this.closePasswordModal();
+
+        } catch (err) {
+          console.error('비밀번호 변경 오류:', err);
+          this.showToast('❌ 비밀번호 변경 중 오류가 발생했습니다', 'error');
+        }
+      },
+
+      // ==================== 💰 급여명세서 관리 ====================
+      
+      async loadPayrollList() {
+        const listContainer = document.getElementById('payroll-list');
+        const emptyState = document.getElementById('payroll-empty-state');
+        
+        listContainer.innerHTML = '<div class="text-center py-10"><i class="fas fa-spinner fa-spin text-2xl text-purple-600"></i></div>';
+        emptyState.classList.add('hidden');
+
+        try {
+          let query = this.sb
+            .from('payroll_statements')
+            .select('*')
+            .eq('employee_id', this.state.employee.id)
+            .order('year_month', { ascending: false });
+
+          // 필터 적용
+          const filterYear = document.getElementById('payroll-filter-year').value;
+          const filterStatus = document.getElementById('payroll-filter-status').value;
+          
+          if (filterYear) {
+            query = query.ilike('year_month', `${filterYear}%`);
+          }
+          if (filterStatus) {
+            query = query.eq('status', filterStatus);
+          }
+
+          const { data, error } = await query;
+
+          if (error) {
+            console.error('명세서 로드 실패:', error);
+            listContainer.innerHTML = '<div class="text-center py-10 text-red-500">로드 실패</div>';
+            return;
+          }
+
+          // 통계 업데이트
+          this.updatePayrollStatistics(data);
+
+          if (!data || data.length === 0) {
+            listContainer.innerHTML = '';
+            emptyState.classList.remove('hidden');
+            return;
+          }
+
+          // 카드 렌더링
+          listContainer.innerHTML = '';
+          data.forEach(payroll => {
+            const card = this.createPayrollCard(payroll);
+            listContainer.appendChild(card);
+          });
+
+        } catch (err) {
+          console.error('명세서 로드 오류:', err);
+          listContainer.innerHTML = '<div class="text-center py-10 text-red-500">오류 발생</div>';
+        }
+      },
+
+      updatePayrollStatistics(data) {
+        const total = data.length;
+        const pending = data.filter(p => p.status === 'pending').length;
+        const viewed = data.filter(p => p.status !== 'pending').length;
+        const latest = data.length > 0 ? data[0].year_month : '-';
+
+        document.getElementById('payroll-total-count').textContent = total;
+        document.getElementById('payroll-pending-count').textContent = pending;
+        document.getElementById('payroll-viewed-count').textContent = viewed;
+        document.getElementById('payroll-latest-month').textContent = this.formatYearMonth(latest);
+      },
+
+      createPayrollCard(payroll) {
+        const div = document.createElement('div');
+        div.className = 'border-2 border-gray-100 rounded-xl p-4 hover:border-purple-500 hover:shadow-lg transition-all';
+        
+        // 상태 배지
+        let statusBadge = '';
+        let statusClass = '';
+        if (payroll.status === 'pending') {
+          statusBadge = '🔔 미확인';
+          statusClass = 'bg-orange-100 text-orange-800';
+        } else if (payroll.status === 'viewed') {
+          statusBadge = '✅ 확인함';
+          statusClass = 'bg-green-100 text-green-800';
+        } else if (payroll.status === 'downloaded') {
+          statusBadge = '⬇️ 다운로드함';
+          statusClass = 'bg-blue-100 text-blue-800';
+        }
+
+        div.innerHTML = `
+          <div class="flex justify-between items-start mb-3">
+            <div>
+              <h4 class="text-lg font-bold text-gray-800">
+                <i class="fas fa-calendar-alt text-purple-600 mr-2"></i>
+                ${this.formatYearMonth(payroll.year_month)}
+              </h4>
+              <p class="text-sm text-gray-500">
+                등록일: ${new Date(payroll.uploaded_at).toLocaleDateString('ko-KR')}
+              </p>
+            </div>
+            <span class="px-3 py-1 rounded-full text-xs font-medium ${statusClass}">
+              ${statusBadge}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 mb-3 text-sm">
+            <div>
+              <span class="text-gray-600">조회:</span>
+              <span class="font-semibold text-gray-800">${payroll.view_count}회</span>
+            </div>
+            <div>
+              <span class="text-gray-600">다운로드:</span>
+              <span class="font-semibold text-gray-800">${payroll.download_count}회</span>
+            </div>
+            ${payroll.first_viewed_at ? `
+            <div class="col-span-2">
+              <span class="text-gray-600">최초 확인:</span>
+              <span class="font-semibold text-gray-800">${new Date(payroll.first_viewed_at).toLocaleString('ko-KR')}</span>
+            </div>
+            ` : ''}
+          </div>
+
+          <div class="flex gap-2">
+            <button onclick="app.viewPayroll('${payroll.id}')" class="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
+              <i class="fas fa-eye mr-2"></i>조회
+            </button>
+            <button onclick="app.downloadPayroll('${payroll.id}', '${payroll.file_url}')" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+              <i class="fas fa-download mr-2"></i>다운로드
+            </button>
+          </div>
+        `;
+
+        return div;
+      },
+
+      formatYearMonth(yearMonth) {
+        if (!yearMonth || yearMonth === '-') return '-';
+        const [year, month] = yearMonth.split('-');
+        return `${year}년 ${parseInt(month)}월`;
+      },
+
+      async viewPayroll(payrollId) {
+        try {
+          // 조회 기록 업데이트
+          const { error } = await this.sb
+            .from('payroll_statements')
+            .update({
+              last_viewed_at: new Date().toISOString()
+            })
+            .eq('id', payrollId);
+
+          if (error) {
+            console.error('조회 기록 업데이트 실패:', error);
+          }
+
+          // 파일 URL 가져오기
+          const { data: payroll } = await this.sb
+            .from('payroll_statements')
+            .select('file_url')
+            .eq('id', payrollId)
+            .single();
+
+          if (payroll && payroll.file_url) {
+            window.open(payroll.file_url, '_blank');
+            
+            // 목록 새로고침
+            setTimeout(() => this.loadPayrollList(), 1000);
+          }
+
+        } catch (err) {
+          console.error('명세서 조회 오류:', err);
+          this.showToast('❌ 명세서 조회 중 오류가 발생했습니다', 'error');
+        }
+      },
+
+      async downloadPayroll(payrollId, fileUrl) {
+        try {
+          // 다운로드 횟수 증가
+          const { data: current } = await this.sb
+            .from('payroll_statements')
+            .select('download_count, status')
+            .eq('id', payrollId)
+            .single();
+
+          await this.sb
+            .from('payroll_statements')
+            .update({
+              download_count: (current.download_count || 0) + 1,
+              status: 'downloaded',
+              last_viewed_at: new Date().toISOString()
+            })
+            .eq('id', payrollId);
+
+          // 다운로드 실행
+          const link = document.createElement('a');
+          link.href = fileUrl;
+          link.download = '';
+          link.target = '_blank';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          this.showToast('✅ 다운로드를 시작했습니다', 'success');
+
+          // 목록 새로고침
+          setTimeout(() => this.loadPayrollList(), 1000);
+
+        } catch (err) {
+          console.error('다운로드 오류:', err);
+          this.showToast('❌ 다운로드 중 오류가 발생했습니다', 'error');
+        }
+      },
+
+
+
+      async submitInspection() {
+        const files = document.getElementById('inspection-photos').files;
+        const actualAmount = parseFloat(document.getElementById('inspection-actual-amount').value);
+        const notes = document.getElementById('inspection-notes').value;
+        
+        // 1. 파일 선택 검증
+        if (!files || files.length === 0) {
+          this.showToast('⚠️ 사진을 선택해주세요', 'error');
+          return;
+        }
+        
+        if (files.length > 10) {
+          this.showToast(`⚠️ 최대 10장까지 업로드 가능합니다 (현재: ${files.length}장)`, 'error');
+          return;
+        }
+        
+        // 2. 실제 금액 검증
+        if (!actualAmount || actualAmount <= 0) {
+          this.showToast('⚠️ 실제 금액을 입력하세요', 'error');
+          return;
+        }
+        
+        // 3. 사진별 물품 선택 검증
+        const photoItems = [];
+        const photoNotes = [];
+        
+        for (let i = 0; i < files.length; i++) {
+          const itemSelect = document.getElementById(`inspection-photo-item-${i}`);
+          const noteInput = document.getElementById(`inspection-photo-note-${i}`);
+          
+          const selectedItemId = itemSelect ? itemSelect.value : '';
+          if (!selectedItemId) {
+            this.showToast(`⚠️ 사진 ${i + 1}의 물품을 선택해주세요`, 'error');
+            return;
+          }
+          
+          photoItems.push(selectedItemId);
+          photoNotes.push(noteInput ? noteInput.value.trim() : '');
+        }
+        
+        console.log('📦 선택된 물품:', photoItems);
+        console.log('📝 사진별 메모:', photoNotes);
+        
+        try {
+          this.showToast('📤 검수 정보를 업로드하는 중...', 'info');
+          
+          let successCount = 0;
+          const errors = [];
+          const systemUserId = '00000000-0000-0000-0000-000000000000';
+          
+          // 4. 각 파일 순차 업로드
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            
+            try {
+              // 파일 확장자 추출
+              let fileExt = 'jpg';
+              if (file.name && file.name.includes('.')) {
+                fileExt = file.name.split('.').pop().toLowerCase();
+              } else if (file.type) {
+                const mimeMap = {
+                  'image/jpeg': 'jpg',
+                  'image/png': 'png',
+                  'image/gif': 'gif',
+                  'image/webp': 'webp'
+                };
+                fileExt = mimeMap[file.type.toLowerCase()] || 'jpg';
+              }
+              
+              // 안전한 파일명 생성
+              const timestamp = Date.now();
+              const random = Math.random().toString(36).substring(2, 11);
+              const safeFileName = `${timestamp}_${i}_${random}.${fileExt}`;
+              const storagePath = `${this.state.currentInspection.id}/${safeFileName}`;
+              
+              console.log(`📁 파일 ${i + 1} 업로드 시작:`, {
+                original: file.name,
+                safe: safeFileName,
+                size: (file.size / 1024).toFixed(2) + 'KB',
+                type: file.type,
+                itemId: photoItems[i],
+                note: photoNotes[i] || '(메모 없음)'
+              });
+              
+              // Storage 업로드
+              const { data: uploadData, error: uploadError } = await this.sb.storage
+                .from('purchase-photos')
+                .upload(storagePath, file, {
+                  contentType: file.type || 'image/jpeg',
+                  upsert: false
+                });
+              
+              if (uploadError) {
+                console.error('❌ 스토리지 업로드 실패:', uploadError);
+                errors.push(`${file.name}: ${uploadError.message}`);
+                continue;
+              }
+              
+              console.log('✅ 스토리지 업로드 성공:', uploadData);
+              
+              // 공개 URL 가져오기
+              const { data: urlData } = this.sb.storage
+                .from('purchase-photos')
+                .getPublicUrl(storagePath);
+              
+              if (!urlData || !urlData.publicUrl) {
+                console.error('❌ 공개 URL 가져오기 실패');
+                errors.push(`${file.name}: URL 가져오기 실패`);
+                continue;
+              }
+              
+              console.log('🔗 공개 URL 획득:', urlData.publicUrl);
+              
+              // DB 저장
+              const photoData = {
+                purchase_id: this.state.currentInspection.id,
+                purchase_item_id: photoItems[i],
+                photo_url: urlData.publicUrl,
+                uploaded_by: this.state.employee?.id || systemUserId,
+                uploaded_at: new Date().toISOString()
+              };
+              
+              if (photoNotes[i]) {
+                photoData.note = photoNotes[i];
+              }
+              
+              console.log('💾 DB 저장 시도:', {
+                ...photoData,
+                currentTime: new Date().toISOString(),
+                localTime: new Date().toLocaleString('ko-KR')
+              });
+              
+              const { data: insertData, error: insertError } = await this.sb
+                .from('purchase_photos')
+                .insert(photoData)
+                .select();
+              
+              if (insertError) {
+                console.error('❌ DB 저장 실패:', insertError);
+                // 스토리지 롤백
+                try {
+                  await this.sb.storage
+                    .from('purchase-photos')
+                    .remove([storagePath]);
+                  console.log('🗑️ 스토리지 롤백 완료');
+                } catch (deleteErr) {
+                  console.error('⚠️ 스토리지 롤백 실패:', deleteErr);
+                }
+                errors.push(`${file.name}: DB 저장 실패 - ${insertError.message}`);
+                continue;
+              }
+              
+              console.log('✅ DB 저장 성공:', insertData);
+              successCount++;
+              
+            } catch (fileError) {
+              console.error(`❌ 파일 ${i + 1} 처리 중 오류:`, fileError);
+              errors.push(`${file.name}: ${fileError.message || '알 수 없는 오류'}`);
+            }
+          }
+          
+          console.log('📊 업로드 완료:', {
+            timestamp: new Date().toISOString(),
+            localTime: new Date().toLocaleString('ko-KR'),
+            total: files.length,
+            success: successCount,
+            failed: errors.length
+          });
+          
+          // 5. 구매 정보 업데이트
+          const { error: updateError } = await this.sb
+            .from('purchases')
+            .update({
+              status: 'completed',
+              completion_time: new Date().toISOString(),
+              actual_amount: actualAmount,
+              inspected_by: this.state.employee?.name || '직원',
+              inspected_at: new Date().toISOString(),
+              inspection_notes: notes || null
+            })
+            .eq('id', this.state.currentInspection.id);
+          
+          if (updateError) {
+            console.error('⚠️ 구매 정보 업데이트 실패:', updateError);
+          }
+          
+          // 6. 결과 알림
+          if (successCount === files.length) {
+            this.showToast(`✅ 검수가 완료되었습니다! (${successCount}장)`, 'success');
+          } else if (successCount > 0) {
+            this.showToast(`⚠️ ${successCount}/${files.length}장이 업로드되었습니다\n\n실패: ${errors.join(', ')}`, 'warning');
+          } else {
+            this.showToast(`❌ 업로드 실패\n\n${errors.join('\n')}`, 'error');
+            return;
+          }
+          
+          this.closeInspectionModal();
+          await this.loadPurchaseBadge();
+          
+          const purchaseModal = document.getElementById('purchase-modal');
+          if (purchaseModal && !purchaseModal.classList.contains('hidden')) {
+            await this.loadMyPurchases();
+          }
+          
+        } catch (err) {
+          console.error('❌ 검수 완료 처리 실패:', err);
+          this.showToast('❌ 검수 처리 중 오류가 발생했습니다: ' + (err.message || '알 수 없는 오류'), 'error');
+        }
+      },
+
+      openNewPurchaseRequest() {
+        document.getElementById('new-purchase-reason').value = '';
+        document.getElementById('new-purchase-items').innerHTML = '';
+        document.getElementById('new-purchase-total').textContent = '₩0';
+        
+        this.state.newPurchaseItemCounter = 0;
+        this.addPurchaseItemRow();
+        
+        document.getElementById('new-purchase-modal').classList.remove('hidden');
+      },
+
+      closeNewPurchaseModal() {
+        document.getElementById('new-purchase-modal').classList.add('hidden');
+      },
+
+      addPurchaseItemRow() {
+        const itemId = ++this.state.newPurchaseItemCounter;
+        const container = document.getElementById('new-purchase-items');
+        
+        const itemHtml = `
+          <div id="item-${itemId}" class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-xs font-medium text-gray-600">물품 #${itemId}</span>
+              ${itemId > 1 ? `<button onclick="app.removePurchaseItemRow(${itemId})" class="text-red-500 hover:text-red-700 text-xs"><i class="fas fa-times"></i></button>` : ''}
+            </div>
+            <div class="space-y-2">
+              <input type="text" id="item-name-${itemId}" placeholder="물품명" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500" required onchange="app.calculateNewPurchaseTotal()">
+              <div class="grid grid-cols-2 gap-2">
+                <input type="number" id="item-quantity-${itemId}" placeholder="수량" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500" value="1" min="1" required onchange="app.calculateNewPurchaseTotal()">
+                <input type="number" id="item-price-${itemId}" placeholder="단가" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500" min="0" required onchange="app.calculateNewPurchaseTotal()">
+              </div>
+            </div>
+          </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', itemHtml);
+      },
+
+      removePurchaseItemRow(itemId) {
+        const element = document.getElementById(`item-${itemId}`);
+        if (element) {
+          element.remove();
+          this.calculateNewPurchaseTotal();
+        }
+      },
+
+      calculateNewPurchaseTotal() {
+        let total = 0;
+        const container = document.getElementById('new-purchase-items');
+        // 직계 자식 div만 선택 (id가 "item-숫자" 형태인 것만)
+        const items = Array.from(container.children).filter(el => /^item-\d+$/.test(el.id));
+        
+        items.forEach(item => {
+          const id = item.id.split('-')[1];
+          const quantity = parseFloat(document.getElementById(`item-quantity-${id}`)?.value) || 0;
+          const price = parseFloat(document.getElementById(`item-price-${id}`)?.value) || 0;
+          total += quantity * price;
+        });
+        
+        document.getElementById('new-purchase-total').textContent = `₩${total.toLocaleString('ko-KR')}`;
+      },
+
+      async submitNewPurchaseRequest() {
+        const reason = document.getElementById('new-purchase-reason').value.trim();
+        
+        if (!reason) {
+          this.showToast('⚠️ 구매 사유를 입력하세요', 'error');
+          return;
+        }
+        
+        const container = document.getElementById('new-purchase-items');
+        // 직계 자식 div만 선택 (id가 "item-숫자" 형태인 것만)
+        const itemElements = Array.from(container.children).filter(el => /^item-\d+$/.test(el.id));
+        const items = [];
+        
+        console.log('📦 물품 항목 개수:', itemElements.length);
+        
+        for (let el of itemElements) {
+          const id = el.id.split('-')[1];
+          const nameEl = document.getElementById(`item-name-${id}`);
+          const quantityEl = document.getElementById(`item-quantity-${id}`);
+          const priceEl = document.getElementById(`item-price-${id}`);
+          
+          console.log(`물품 #${id}:`, {
+            nameEl: !!nameEl,
+            quantityEl: !!quantityEl,
+            priceEl: !!priceEl,
+            name: nameEl?.value,
+            quantity: quantityEl?.value,
+            price: priceEl?.value
+          });
+          
+          const name = nameEl?.value.trim();
+          const quantity = parseFloat(quantityEl?.value);
+          const price = parseFloat(priceEl?.value);
+          
+          console.log(`검증 결과 #${id}:`, { name, quantity, price, nameOk: !!name, qtyOk: quantity > 0, priceOk: price >= 0 });
+          
+          if (!name || !quantity || quantity <= 0 || !price || price < 0) {
+            console.error('❌ 검증 실패:', { name, quantity, price });
+            this.showToast('⚠️ 모든 물품 정보를 정확히 입력하세요', 'error');
+            return;
+          }
+          
+          items.push({ item_name: name, quantity, unit_price: price, category: '기타', subtotal: quantity * price });
+        }
+        
+        console.log('✅ 검증 통과, 총 물품:', items);
+        
+        if (items.length === 0) {
+          this.showToast('⚠️ 최소 1개 이상의 물품을 추가하세요', 'error');
+          return;
+        }
+        
+        const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+        
+        try {
+          this.showToast('📤 구매 요청을 제출하는 중...', 'info');
+          
+          const { data: purchase, error: e1 } = await this.sb
+            .from('purchases')
+            .insert([{
+              apartment_id: this.state.employee.apartment_id,
+              requester_employee_id: this.state.employee.id,
+              requester_name: this.state.employee.name,
+              requester_role: this.state.employee.position || '직원',
+              reason: reason,
+              total_amount: totalAmount,
+              status: 'pending'
+            }])
+            .select()
+            .single();
+          
+          if (e1) throw e1;
+          
+          const itemRecords = items.map(item => ({
+            purchase_id: purchase.id,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            category: item.category || '기타'
+          }));
+          
+          const { error: e2 } = await this.sb
+            .from('purchase_items')
+            .insert(itemRecords);
+          
+          if (e2) throw e2;
+          
+          this.showToast('✅ 구매 요청이 제출되었습니다!', 'success');
+          this.closeNewPurchaseModal();
+          
+          await this.loadPurchaseBadge();
+        } catch (err) {
+          console.error('❌ 구매 요청 제출 실패:', err);
+          this.showToast('❌ 구매 요청 제출에 실패했습니다', 'error');
+        }
+      },
+      
+      // ==================== 토스트 메시지 ====================
+      showToast(message, type = 'success', duration = 3000) {
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white font-bold z-50 animate-fade-in ${
+          type === 'success' ? 'bg-green-500' : 
+          type === 'error' ? 'bg-red-500' : 
+          type === 'info' ? 'bg-blue-500' : 'bg-gray-500'
+        }`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transition = 'opacity 0.3s';
+          setTimeout(() => toast.remove(), 300);
+        }, duration);
+      },
+      
+      // ==================== UI 렌더링 ====================
+      renderUI() {
+        if (this.state.employee) {
+          document.getElementById('header-name').textContent = this.state.employee.name;
+          document.getElementById('header-role').textContent = this.state.employee.position || '직원';
+        }
+        
+        // 오늘의 기록 로드
+        this.loadTodayAttendance();
+        
+        // 오늘의 사진 로드
+        this.loadTodayPhotos();
+        
+        // 구매 요청 배지 로드
+        this.loadPurchaseBadge();
+        
+        // 🆕 휴가 신청 배지 로드
+        this.updateVacationBadge();
+      },
+      
+      // ==================== 이벤트 리스너 ====================
+      setupEventListeners() {
+        // 탭 전환
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            this.switchTab(tab);
+          });
+        });
+        
+        // 출퇴근 버튼
+        document.getElementById('btn-checkin').addEventListener('click', () => this.recordAttendance('출근'));
+        document.getElementById('btn-checkout').addEventListener('click', () => this.recordAttendance('퇴근'));
+        document.getElementById('btn-break-start').addEventListener('click', () => this.recordAttendance('휴게 시작'));
+        document.getElementById('btn-break-end').addEventListener('click', () => this.recordAttendance('휴게 종료'));
+        
+        // 🆕 휴가 버튼
+        document.getElementById('btn-vacation').addEventListener('click', () => this.openVacationModal());
+        
+        // 새로고침 버튼
+        document.getElementById('btn-refresh-attendance').addEventListener('click', () => this.loadTodayAttendance());
+        
+        // 캘린더 버튼
+        document.getElementById('btn-open-calendar').addEventListener('click', () => this.openCalendar());
+        
+        // 로그아웃
+        document.getElementById('btn-logout').addEventListener('click', () => {
+          if (confirm('로그아웃 하시겠습니까?')) {
+            localStorage.clear();
+            location.reload();
+          }
+        });
+        
+        // 🔐 비밀번호 변경 버튼
+        document.getElementById('btn-change-password').addEventListener('click', () => {
+          this.openPasswordModal();
+        });
+        
+        // 💰 급여명세서 필터
+        document.getElementById('payroll-filter-year').addEventListener('change', () => {
+          this.loadPayrollList();
+        });
+        document.getElementById('payroll-filter-status').addEventListener('change', () => {
+          this.loadPayrollList();
+        });
+        
+        // Before/After 토글
+        document.getElementById('before-after-toggle').addEventListener('change', (e) => {
+          this.toggleBeforeAfterMode();
+        });
+        
+        // 단일 사진 촬영
+        document.getElementById('btn-take-photo').addEventListener('click', () => {
+          document.getElementById('file-photo').click();
+        });
+        
+        document.getElementById('file-photo').addEventListener('change', (e) => {
+          this.handleSinglePhoto(e.target);
+        });
+        
+        // 갤러리 다중 선택
+        document.getElementById('btn-select-photo').addEventListener('click', () => {
+          document.getElementById('file-gallery').click();
+        });
+        
+        document.getElementById('file-gallery').addEventListener('change', (e) => {
+          this.handleMultiplePhotos(e.target);
+        });
+        
+        // 사진 업로드
+        document.getElementById('btn-upload-photos').addEventListener('click', () => {
+          this.uploadSelectedPhotos();
+        });
+        
+        // 전체 삭제
+        document.getElementById('btn-clear-photos').addEventListener('click', () => {
+          this.clearSelectedPhotos();
+        });
+        
+        // Before/After 사진 촬영
+        document.getElementById('btn-before-photo').addEventListener('click', () => {
+          document.getElementById('inp-before-capture').click();
+        });
+        
+        document.getElementById('btn-after-photo').addEventListener('click', () => {
+          document.getElementById('inp-after-capture').click();
+        });
+        
+        // Before/After 파일 선택
+        document.getElementById('inp-before-capture').addEventListener('change', (e) => {
+          this.handleBeforeAfterPhoto('before', e.target);
+        });
+        
+        document.getElementById('inp-after-capture').addEventListener('change', (e) => {
+          this.handleBeforeAfterPhoto('after', e.target);
+        });
+        
+        // Before/After 업로드
+        document.getElementById('btn-submit-before-after').addEventListener('click', () => {
+          this.uploadBeforeAfter();
+        });
+        
+        // 사진 새로고침
+        document.getElementById('btn-refresh-photos').addEventListener('click', () => {
+          this.loadTodayPhotos();
+        });
+        
+        // 구매 요청 버튼 (scan.html의 모달 재사용)
+        document.getElementById('btn-new-purchase').addEventListener('click', () => {
+          this.openNewPurchaseRequest();
+        });
+        
+        document.getElementById('btn-my-purchases').addEventListener('click', () => {
+          this.showMyPurchases();
+        });
+      },
+      
+      // ==================== 탭 전환 ====================
+      switchTab(tab) {
+        // 탭 버튼 스타일
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          if (btn.dataset.tab === tab) {
+            btn.classList.add('border-blue-500', 'text-blue-500');
+            btn.classList.remove('border-transparent', 'text-gray-500');
+          } else {
+            btn.classList.remove('border-blue-500', 'text-blue-500');
+            btn.classList.add('border-transparent', 'text-gray-500');
+          }
+        });
+        
+        // 탭 콘텐츠
+        document.querySelectorAll('.tab-content').forEach(content => {
+          content.classList.add('hidden');
+        });
+        document.getElementById(`tab-${tab}`).classList.remove('hidden');
+        
+        this.state.currentTab = tab;
+        
+        // 급여 탭으로 전환 시 데이터 로드
+        if (tab === 'payroll') {
+          this.loadPayrollList();
+        }
+      },
+      
+      // ==================== Toast 알림 ====================
+      showToast(message, type = 'info') {
+        const toast = document.getElementById('toast');
+        const icon = document.getElementById('toast-icon');
+        const text = document.getElementById('toast-message');
+        
+        const icons = {
+          success: 'fa-check-circle',
+          error: 'fa-exclamation-circle',
+          warning: 'fa-exclamation-triangle',
+          info: 'fa-info-circle'
+        };
+        
+        const colors = {
+          success: 'bg-green-600',
+          error: 'bg-red-600',
+          warning: 'bg-orange-600',
+          info: 'bg-gray-800'
+        };
+        
+        icon.className = `fas ${icons[type] || icons.info}`;
+        toast.className = `fixed top-4 left-1/2 transform -translate-x-1/2 ${colors[type] || colors.info} text-white px-6 py-3 rounded-lg shadow-lg z-[100] transition-all`;
+        text.textContent = message;
+        
+        toast.classList.remove('hidden');
+        
+        setTimeout(() => {
+          toast.classList.add('hidden');
+        }, 3000);
+      }
+    };
+    
+    // ==================== 앱 시작 ====================
+    // 전역 스코프에 노출 (HTML onclick에서 사용하기 위해)
+    window.app = app;
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      app.init();
+    });
+  </script>
+</body>
+</html>

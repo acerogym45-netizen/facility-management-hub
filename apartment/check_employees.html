@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>직원 상태 확인</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #1b5e3e;
+            color: white;
+            font-weight: bold;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        .active {
+            color: green;
+            font-weight: bold;
+        }
+        .inactive {
+            color: red;
+            font-weight: bold;
+        }
+        .expired {
+            background: #fee;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 직원 상태 및 계약 정보 확인</h1>
+        <div id="loading" class="loading">데이터 로딩 중...</div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qgpqhtuynxhmgawakjxe.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncHFodHV5bnhobWdhd2FranhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ0OTcwMDcsImV4cCI6MjA1MDA3MzAwN30.BM5w5eiIGN5eC1VwaTq3VRjmkDxGXlqTnXwbz3Bc4fk';
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function checkEmployees() {
+            try {
+                // 계약 종료일이 있는 모든 직원 조회 (is_active 필터 없이)
+                const { data: employees, error } = await supabase
+                    .from('employees')
+                    .select(`
+                        id,
+                        name,
+                        phone,
+                        is_active,
+                        contract_start,
+                        contract_end,
+                        apartments (name)
+                    `)
+                    .not('contract_end', 'is', null)
+                    .order('contract_end', { ascending: true });
+
+                if (error) {
+                    throw error;
+                }
+
+                const today = new Date();
+                const resultDiv = document.getElementById('result');
+                const loadingDiv = document.getElementById('loading');
+
+                loadingDiv.style.display = 'none';
+
+                if (employees.length === 0) {
+                    resultDiv.innerHTML = '<p>계약 정보가 있는 직원이 없습니다.</p>';
+                    return;
+                }
+
+                let html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>이름</th>
+                                <th>아파트</th>
+                                <th>활성 상태</th>
+                                <th>계약 시작</th>
+                                <th>계약 종료</th>
+                                <th>만료 여부</th>
+                                <th>전화번호</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                employees.forEach(emp => {
+                    const contractEnd = new Date(emp.contract_end);
+                    const daysUntilExpiry = Math.ceil((contractEnd - today) / (1000 * 60 * 60 * 24));
+                    const isExpired = daysUntilExpiry < 0;
+                    const apartmentName = emp.apartments?.name || '미배정';
+
+                    let expiryStatus = '';
+                    if (isExpired) {
+                        expiryStatus = `만료 ${Math.abs(daysUntilExpiry)}일 경과`;
+                    } else {
+                        expiryStatus = `${daysUntilExpiry}일 남음`;
+                    }
+
+                    const rowClass = isExpired && emp.is_active ? 'expired' : '';
+                    const activeClass = emp.is_active ? 'active' : 'inactive';
+                    const activeText = emp.is_active ? '✅ 활성' : '❌ 비활성';
+
+                    html += `
+                        <tr class="${rowClass}">
+                            <td><strong>${emp.name}</strong></td>
+                            <td>${apartmentName}</td>
+                            <td class="${activeClass}">${activeText}</td>
+                            <td>${emp.contract_start || '-'}</td>
+                            <td>${emp.contract_end}</td>
+                            <td>${expiryStatus}</td>
+                            <td>${emp.phone || '-'}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 8px;">
+                        <h3>📊 통계</h3>
+                        <p><strong>전체 직원 (계약정보 있음):</strong> ${employees.length}명</p>
+                        <p><strong>활성 직원:</strong> ${employees.filter(e => e.is_active).length}명</p>
+                        <p><strong>비활성 직원:</strong> ${employees.filter(e => !e.is_active).length}명</p>
+                        <p><strong>⚠️ 만료되었지만 활성 상태:</strong> ${employees.filter(e => {
+                            const contractEnd = new Date(e.contract_end);
+                            const daysUntilExpiry = Math.ceil((contractEnd - today) / (1000 * 60 * 60 * 24));
+                            return daysUntilExpiry < 0 && e.is_active;
+                        }).length}명</p>
+                    </div>
+                `;
+
+                resultDiv.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').innerHTML = '❌ 오류 발생: ' + error.message;
+            }
+        }
+
+        checkEmployees();
+    </script>
+</body>
+</html>

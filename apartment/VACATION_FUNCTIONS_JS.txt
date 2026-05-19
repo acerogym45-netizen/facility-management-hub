@@ -1,0 +1,281 @@
+// 이 내용을 scan.html의 app 객체 안에 추가
+
+// ==========================================
+// 휴가 관리 기능
+// ==========================================
+
+// 휴가 관리 모달 열기
+showVacationManager: async function () {
+  const modal = document.getElementById('vacation-modal');
+  modal.classList.remove('hidden');
+  
+  this.currentVacationTab = 'pending';
+  await this.loadVacations('pending');
+},
+
+// 휴가 관리 모달 닫기
+closeVacationModal: function () {
+  const modal = document.getElementById('vacation-modal');
+  modal.classList.add('hidden');
+},
+
+// 휴가 신청 폼 열기
+showNewVacationForm: function () {
+  const modal = document.getElementById('new-vacation-modal');
+  modal.classList.remove('hidden');
+  
+  // 기본값 설정: 시작일은 내일, 종료일은 모레
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayAfter = new Date();
+  dayAfter.setDate(dayAfter.getDate() + 2);
+  
+  document.getElementById('vacation-start').value = tomorrow.toISOString().split('T')[0];
+  document.getElementById('vacation-end').value = dayAfter.toISOString().split('T')[0];
+  document.getElementById('vacation-note').value = '';
+},
+
+// 휴가 신청 폼 닫기
+closeNewVacationForm: function () {
+  const modal = document.getElementById('new-vacation-modal');
+  modal.classList.add('hidden');
+  document.getElementById('vacation-form').reset();
+},
+
+// 휴가 탭 전환
+switchVacationTab: async function (tab) {
+  this.currentVacationTab = tab;
+  
+  // 탭 버튼 스타일 업데이트
+  ['pending', 'approved', 'rejected'].forEach(t => {
+    const btn = document.getElementById(`vacation-tab-${t}`);
+    if (t === tab) {
+      btn.classList.add('border-yellow-600', 'text-yellow-600', 'font-bold');
+      btn.classList.remove('text-gray-600');
+    } else {
+      btn.classList.remove('border-yellow-600', 'text-yellow-600', 'font-bold');
+      btn.classList.add('text-gray-600');
+    }
+  });
+  
+  await this.loadVacations(tab);
+},
+
+// 휴가 목록 로드
+loadVacations: async function (status) {
+  const listContainer = document.getElementById('vacation-list');
+  listContainer.innerHTML = '<div class="text-center py-8"><i class="fas fa-spinner fa-spin text-4xl text-yellow-600"></i><p class="mt-4 text-gray-600">불러오는 중...</p></div>';
+  
+  try {
+    if (!this.state.selectedEmp || !this.state.selectedEmp.id) {
+      listContainer.innerHTML = '<div class="text-center py-8 text-gray-500"><i class="fas fa-exclamation-circle text-4xl mb-4"></i><p>직원을 먼저 선택해주세요.</p></div>';
+      return;
+    }
+    
+    let query = this.sb
+      .from('vacations')
+      .select('*')
+      .eq('employee_id', this.state.selectedEmp.id)
+      .order('created_at', { ascending: false });
+    
+    if (status !== 'all') {
+      query = query.eq('status', status);
+    }
+    
+    const { data: vacations, error } = await query;
+    
+    if (error) throw error;
+    
+    // 카운트 업데이트
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    if (vacations) {
+      vacations.forEach(v => {
+        if (counts[v.status] !== undefined) counts[v.status]++;
+      });
+    }
+    
+    document.getElementById('vacation-count-pending').textContent = counts.pending;
+    document.getElementById('vacation-count-approved').textContent = counts.approved;
+    document.getElementById('vacation-count-rejected').textContent = counts.rejected;
+    
+    // 배지 업데이트 (메인 버튼)
+    const badge = document.getElementById('vacation-pending-badge');
+    if (counts.pending > 0) {
+      badge.textContent = counts.pending;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+    
+    // 휴가 목록 렌더링
+    if (!vacations || vacations.length === 0) {
+      listContainer.innerHTML = `
+        <div class="text-center py-8 text-gray-400">
+          <i class="fas fa-inbox text-4xl mb-4"></i>
+          <p>${status === 'pending' ? '승인 대기 중인 휴가가 없습니다.' : status === 'approved' ? '승인된 휴가가 없습니다.' : '거부된 휴가가 없습니다.'}</p>
+        </div>
+      `;
+      return;
+    }
+    
+    let html = '<div class="space-y-3">';
+    vacations.forEach(vacation => {
+      const statusColors = {
+        pending: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-600', badge: 'bg-orange-100 text-orange-800' },
+        approved: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-600', badge: 'bg-green-100 text-green-800' },
+        rejected: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-600', badge: 'bg-red-100 text-red-800' }
+      };
+      const colors = statusColors[vacation.status] || statusColors.pending;
+      
+      const statusLabel = {
+        pending: '승인 대기',
+        approved: '승인됨',
+        rejected: '거부됨'
+      }[vacation.status] || vacation.status;
+      
+      const typeColors = {
+        '연차': 'bg-blue-100 text-blue-800',
+        '병가': 'bg-red-100 text-red-800',
+        '경조사': 'bg-purple-100 text-purple-800',
+        '기타': 'bg-gray-100 text-gray-800'
+      };
+      const typeColor = typeColors[vacation.vacation_type] || typeColors['기타'];
+      
+      html += `
+        <div class="${colors.bg} ${colors.border} border-2 rounded-xl p-4">
+          <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="px-3 py-1 ${typeColor} text-xs font-bold rounded-full">${vacation.vacation_type}</span>
+              <span class="px-3 py-1 ${colors.badge} text-xs font-bold rounded-full">${statusLabel}</span>
+            </div>
+            ${vacation.status === 'pending' ? `
+              <button onclick="app.cancelVacation('${vacation.id}')" class="text-red-500 hover:text-red-700 text-xs underline">
+                취소
+              </button>
+            ` : ''}
+          </div>
+          
+          <div class="space-y-1 mb-2">
+            <div class="flex items-center gap-2 text-sm">
+              <i class="fas fa-calendar-day ${colors.text}"></i>
+              <span class="font-medium">시작일:</span>
+              <span class="text-gray-700">${vacation.start_date || vacation.vacation_date}</span>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+              <i class="fas fa-calendar-check ${colors.text}"></i>
+              <span class="font-medium">종료일:</span>
+              <span class="text-gray-700">${vacation.end_date || vacation.vacation_date}</span>
+            </div>
+          </div>
+          
+          ${vacation.note ? `
+            <div class="text-sm text-gray-600 bg-white/50 rounded-lg p-2 mb-2">
+              <span class="font-medium">사유:</span> ${vacation.note}
+            </div>
+          ` : ''}
+          
+          ${vacation.status === 'rejected' && vacation.rejection_reason ? `
+            <div class="text-sm text-red-600 bg-red-50 rounded-lg p-2">
+              <span class="font-medium">거부 사유:</span> ${vacation.rejection_reason}
+            </div>
+          ` : ''}
+          
+          ${vacation.approved_at ? `
+            <div class="text-xs text-gray-500 mt-2">
+              ${vacation.status === 'approved' ? '승인' : '처리'} 시각: ${new Date(vacation.approved_at).toLocaleString('ko-KR')}
+            </div>
+          ` : `
+            <div class="text-xs text-gray-500 mt-2">
+              신청 시각: ${new Date(vacation.created_at).toLocaleString('ko-KR')}
+            </div>
+          `}
+        </div>
+      `;
+    });
+    html += '</div>';
+    
+    listContainer.innerHTML = html;
+    
+  } catch (error) {
+    console.error('휴가 목록 로드 실패:', error);
+    listContainer.innerHTML = `
+      <div class="text-center py-8 text-red-500">
+        <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
+        <p>휴가 목록을 불러오는데 실패했습니다.</p>
+        <p class="text-sm mt-2">${error.message}</p>
+      </div>
+    `;
+  }
+},
+
+// 휴가 신청
+submitVacationRequest: async function (event) {
+  event.preventDefault();
+  
+  const type = document.getElementById('vacation-type').value;
+  const startDate = document.getElementById('vacation-start').value;
+  const endDate = document.getElementById('vacation-end').value;
+  const note = document.getElementById('vacation-note').value.trim();
+  
+  if (!this.state.selectedEmp || !this.state.selectedEmp.id) {
+    alert('직원 정보가 없습니다.');
+    return;
+  }
+  
+  if (new Date(startDate) > new Date(endDate)) {
+    alert('종료일은 시작일보다 늦어야 합니다.');
+    return;
+  }
+  
+  try {
+    const { error } = await this.sb.from('vacations').insert({
+      apartment_id: this.state.aptId,
+      employee_id: this.state.selectedEmp.id,
+      employee_name: this.state.selectedEmp.name,
+      vacation_type: type,
+      start_date: startDate,
+      end_date: endDate,
+      vacation_date: startDate, // 기존 컬럼 호환성
+      note: note || null,
+      status: 'pending'
+    });
+    
+    if (error) {
+      if (error.code === '23505') {
+        alert('해당 기간에 이미 휴가 신청이 있습니다.');
+      } else {
+        throw error;
+      }
+      return;
+    }
+    
+    alert('✅ 휴가 신청이 완료되었습니다.\n\n관리자 승인 후 적용됩니다.');
+    this.closeNewVacationForm();
+    await this.loadVacations(this.currentVacationTab || 'pending');
+    
+  } catch (error) {
+    console.error('휴가 신청 실패:', error);
+    alert('❌ 휴가 신청에 실패했습니다.\n\n' + error.message);
+  }
+},
+
+// 휴가 신청 취소
+cancelVacation: async function (vacationId) {
+  if (!confirm('이 휴가 신청을 취소하시겠습니까?')) return;
+  
+  try {
+    const { error } = await this.sb
+      .from('vacations')
+      .delete()
+      .eq('id', vacationId);
+    
+    if (error) throw error;
+    
+    alert('✅ 휴가 신청이 취소되었습니다.');
+    await this.loadVacations(this.currentVacationTab || 'pending');
+    
+  } catch (error) {
+    console.error('휴가 취소 실패:', error);
+    alert('❌ 휴가 취소에 실패했습니다.\n\n' + error.message);
+  }
+},

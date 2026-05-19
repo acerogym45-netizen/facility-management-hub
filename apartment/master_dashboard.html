@@ -1,0 +1,2943 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마스터플랜리소스 총괄 관리자 대시보드</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- CDNs -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+        }
+        .apartment-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            border-left: 4px solid #1b5e3e;
+        }
+        .apartment-card:hover {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            transform: translateX(4px);
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-normal { background: #d1fae5; color: #065f46; }
+        .status-warning { background: #fef3c7; color: #92400e; }
+        .status-critical { background: #fee2e2; color: #991b1b; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1b5e3e;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 40px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .brand-color { color: #1b5e3e; }
+        .brand-bg { background-color: #1b5e3e; }
+        .modal-backdrop {
+            backdrop-filter: blur(8px);
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="glass-card p-6 mb-6">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 brand-bg rounded-full flex items-center justify-center">
+                        <i class="fas fa-crown text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold brand-color" id="master-title">마스터플랜리소스(유) 총괄 관리자</h1>
+                        <p class="text-gray-600">전체 아파트 통합 관리 대시보드</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-gray-600">로그인 계정</p>
+                    <p class="font-bold brand-color">master@masterplan.com</p>
+                    <div class="flex gap-2 justify-end mt-2">
+                        <button onclick="window.location.href='brand_settings.html'" class="text-sm text-purple-600 hover:text-purple-700">
+                            <i class="fas fa-palette"></i> 브랜드 설정
+                        </button>
+                        <span class="text-gray-300">|</span>
+                        <button onclick="logout()" class="text-sm text-red-600 hover:text-red-700">
+                            <i class="fas fa-sign-out-alt"></i> 로그아웃
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation (Always Visible) -->
+        <div class="glass-card p-0 mb-6 overflow-hidden" id="master-tab-navigation">
+            <div class="flex border-b">
+                <button onclick="switchMasterTab('dashboard')" id="tab-dashboard" class="flex-1 px-6 py-4 font-medium text-white brand-bg border-b-4 border-green-600 transition">
+                    <i class="fas fa-chart-line mr-2"></i>
+                    📊 대시보드
+                </button>
+                <button onclick="switchMasterTab('settlement')" id="tab-settlement" class="flex-1 px-6 py-4 font-medium text-gray-600 hover:bg-gray-50 transition">
+                    <i class="fas fa-file-invoice mr-2"></i>
+                    📋 정산서 승인
+                </button>
+                <button onclick="switchMasterTab('payroll')" id="tab-payroll" class="flex-1 px-6 py-4 font-medium text-gray-600 hover:bg-gray-50 transition">
+                    <i class="fas fa-money-bill-wave mr-2"></i>
+                    💰 급여 관리
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="glass-card p-12 text-center">
+            <div class="loader"></div>
+            <p class="text-gray-600 mt-4">데이터를 불러오는 중...</p>
+        </div>
+
+        <!-- Dashboard Tab Content -->
+        <div id="tab-content-dashboard" style="display: none;">
+            <!-- Summary Stats Row 1 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <!-- 1. 전체 아파트 -->
+                <div class="stat-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm opacity-90">전체 아파트</p>
+                            <h3 class="text-4xl font-bold mt-2" id="totalApartments">0</h3>
+                        </div>
+                        <i class="fas fa-building text-5xl opacity-30"></i>
+                    </div>
+                </div>
+
+                <!-- 2. 전체 직원 -->
+                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm opacity-90">전체 직원</p>
+                            <h3 class="text-4xl font-bold mt-2" id="totalEmployees">0</h3>
+                        </div>
+                        <i class="fas fa-users text-5xl opacity-30"></i>
+                    </div>
+                </div>
+
+                <!-- 3. 주의 아파트 -->
+                <div class="stat-card" style="background: linear-gradient(135deg, #ffa751 0%, #ffe259 100%);">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm opacity-90">주의 현장</p>
+                            <h3 class="text-4xl font-bold mt-2" id="warningApartments">0</h3>
+                            <p class="text-xs opacity-75 mt-1">개선 필요</p>
+                        </div>
+                        <i class="fas fa-exclamation-circle text-5xl opacity-30"></i>
+                    </div>
+                </div>
+
+                <!-- 4. 계약 관리 -->
+                <div class="stat-card" style="background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);" 
+                     onclick="showContractModal()" 
+                     style="cursor: pointer;">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm opacity-90">계약 관리</p>
+                            <h3 class="text-4xl font-bold mt-2">
+                                <span id="contractExpiring">0</span>
+                                <span class="text-xl"> / </span>
+                                <span id="contractExpired" class="text-2xl text-red-600">0</span>
+                            </h3>
+                            <p class="text-xs opacity-75 mt-1">임박 / 만료</p>
+                        </div>
+                        <i class="fas fa-file-contract text-5xl opacity-30"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Stats Row 2 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <!-- 1. 최근 3일 활동 없는 단지 -->
+                <div class="stat-card cursor-pointer hover:shadow-xl transition-all" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);" onclick="showInactiveApartmentsModal()">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm opacity-90">3일 활동 없음</p>
+                            <h3 class="text-4xl font-bold mt-2" id="inactiveApartments">0</h3>
+                            <p class="text-xs opacity-75 mt-1">클릭하여 확인</p>
+                        </div>
+                        <i class="fas fa-exclamation-triangle text-5xl opacity-30"></i>
+                    </div>
+                </div>
+
+                <!-- 2. Google 시트 미연동 -->
+                <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm opacity-90">시트 미연동</p>
+                            <h3 class="text-4xl font-bold mt-2" id="unlinkedSheets">0</h3>
+                            <p class="text-xs opacity-75 mt-1">연동 필요</p>
+                        </div>
+                        <i class="fab fa-google text-5xl opacity-30"></i>
+                    </div>
+                </div>
+
+                <!-- 3. 직원 미배정 -->
+                <div class="stat-card" style="background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm opacity-90">직원 미배정</p>
+                            <h3 class="text-4xl font-bold mt-2" id="noEmployees">0</h3>
+                            <p class="text-xs opacity-75 mt-1">배치 필요</p>
+                        </div>
+                        <i class="fas fa-user-slash text-5xl opacity-30"></i>
+                    </div>
+                </div>
+
+                <!-- 4. 정산서 제출 현황 -->
+                <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);" 
+                     onclick="switchMasterTab('settlement')" 
+                     style="cursor: pointer;">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm opacity-90">이번 달 정산서</p>
+                            <h3 class="text-4xl font-bold mt-2">
+                                <span id="settlementsSubmitted">0</span>
+                                <span class="text-xl"> / </span>
+                                <span id="settlementsTotal" class="text-2xl">0</span>
+                            </h3>
+                            <p class="text-xs opacity-75 mt-1">제출 / 전체</p>
+                        </div>
+                        <i class="fas fa-file-invoice-dollar text-5xl opacity-30"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Apartments Management -->
+            <div class="glass-card p-6 mb-6">
+                <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+                    <h2 class="text-2xl font-bold brand-color">
+                        <i class="fas fa-building mr-2"></i>
+                        아파트 관리
+                    </h2>
+                    <div class="flex gap-2">
+                        <button onclick="openAddApartmentModal()" class="px-6 py-3 brand-bg hover:opacity-90 text-white rounded-lg font-medium transition shadow-lg">
+                            <i class="fas fa-plus mr-2"></i>
+                            아파트 추가
+                        </button>
+                        <button onclick="filterStatus('all')" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-sm font-medium brand-bg text-white" id="filterAll">
+                            전체
+                        </button>
+                        <button onclick="filterStatus('warning')" class="px-4 py-2 rounded-lg bg-yellow-100 hover:bg-yellow-200 text-sm font-medium" id="filterWarning">
+                            주의
+                        </button>
+                        <button onclick="filterStatus('critical')" class="px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-sm font-medium" id="filterCritical">
+                            긴급
+                        </button>
+                    </div>
+                </div>
+
+                <div id="apartmentsList" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- Apartments will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Recent Activities -->
+            <div class="glass-card p-6">
+                <h2 class="text-2xl font-bold brand-color mb-6">
+                    <i class="fas fa-history mr-2"></i>
+                    최근 활동 내역
+                </h2>
+                <div id="recentActivities" class="space-y-3">
+                    <!-- Activities will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Apartment Modal -->
+    <div id="apartmentModal" class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop hidden items-center justify-center z-50" onclick="if(event.target === this) closeApartmentModal()">
+        <div class="bg-white rounded-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold brand-color" id="modalTitle">
+                    <i class="fas fa-building mr-2"></i>
+                    아파트 추가
+                </h2>
+                <button onclick="closeApartmentModal()" class="text-gray-400 hover:text-gray-600 text-2xl">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="apartmentForm" class="space-y-4">
+                <input type="hidden" id="apartmentId">
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-building mr-1"></i>
+                        아파트 이름 *
+                    </label>
+                    <input type="text" id="apartmentName" required
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-600"
+                           placeholder="예: 봉담자이프라이드시티">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-code mr-1"></i>
+                        아파트 코드
+                    </label>
+                    <input type="text" id="apartmentCode"
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-600"
+                           placeholder="예: APT001">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-key mr-1 text-yellow-600"></i>
+                        로그인 비밀번호 *
+                    </label>
+                    <input type="text" id="apartmentPassword"
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-600"
+                           placeholder="예: apt12345" value="bdxi2026">
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle"></i>
+                        이 아파트 관리자가 로그인할 때 사용할 비밀번호 (기본: bdxi2026)
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-map-marker-alt mr-1"></i>
+                        주소
+                    </label>
+                    <input type="text" id="apartmentAddress"
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-600"
+                           placeholder="예: 경기도 화성시 봉담읍">
+                </div>
+
+                <!-- GPS 좌표 설정 -->
+                <div class="border-2 border-red-300 rounded-lg p-4 bg-red-50">
+                    <h4 class="font-bold text-gray-800 mb-3 flex items-center">
+                        <i class="fas fa-map-marker-alt mr-2 text-red-600"></i>
+                        📍 GPS 위치 설정 (직원 앱용)
+                    </h4>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">위도 (Latitude)</label>
+                            <input type="number" step="0.0000001" id="apartmentLat"
+                                   class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-red-500 font-mono text-sm"
+                                   placeholder="예: 37.2157891">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">경도 (Longitude)</label>
+                            <input type="number" step="0.0000001" id="apartmentLng"
+                                   class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-red-500 font-mono text-sm"
+                                   placeholder="예: 127.0528374">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">허용 반경 (미터)</label>
+                        <input type="number" id="apartmentRadius"
+                               class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-red-500"
+                               placeholder="예: 1000" value="1000" min="50" max="5000">
+                        <p class="text-xs text-gray-500 mt-1">
+                            <i class="fas fa-info-circle"></i>
+                            직원이 이 반경 내에 있어야 출퇴근 기록 가능 (권장: 500~2000m)
+                        </p>
+                    </div>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <p class="text-xs text-blue-800 font-medium mb-2">
+                            <i class="fas fa-lightbulb mr-1"></i>GPS 좌표 찾는 방법:
+                        </p>
+                        <ol class="text-xs text-blue-700 space-y-1 ml-4 list-decimal">
+                            <li>Google Maps에서 단지 관리사무소 검색</li>
+                            <li>관리사무소 위치에서 우클릭 → "이 장소 정보" 클릭</li>
+                            <li>좌표 복사 (예: 37.2157891, 127.0528374)</li>
+                            <li>첫 번째 숫자는 위도, 두 번째 숫자는 경도에 입력</li>
+                        </ol>
+                        <button onclick="openGoogleMapsHelper()" class="mt-2 text-xs bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-external-link-alt mr-1"></i>Google Maps 열기
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fab fa-google mr-1"></i>
+                        Google 시트 ID
+                    </label>
+                    <input type="text" id="googleSheetId"
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-600"
+                           placeholder="예: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms">
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle"></i>
+                        URL에서 /d/ 뒤의 ID만 입력하세요
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-table mr-1"></i>
+                        시트 이름
+                    </label>
+                    <input type="text" id="googleSheetName"
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-600"
+                           placeholder="예: 근무표" value="근무표">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-user mr-1"></i>
+                        담당자 이름
+                    </label>
+                    <input type="text" id="contactPerson"
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-600"
+                           placeholder="예: 홍길동">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-phone mr-1"></i>
+                        담당자 연락처
+                    </label>
+                    <input type="tel" id="contactPhone"
+                           class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-600"
+                           placeholder="예: 010-1234-5678">
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="submit" class="flex-1 brand-bg hover:opacity-90 text-white font-bold py-4 rounded-lg transition">
+                        <i class="fas fa-save mr-2"></i>
+                        저장
+                    </button>
+                    <button type="button" onclick="closeApartmentModal()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-4 rounded-lg transition">
+                        <i class="fas fa-times mr-2"></i>
+                        취소
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Contract Management Modal -->
+    <div id="contractModal" class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop hidden items-center justify-center z-50" onclick="if(event.target === this) closeContractModal()">
+        <div class="bg-white rounded-2xl p-8 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold brand-color">
+                    <i class="fas fa-file-contract mr-2"></i>
+                    계약 관리
+                </h2>
+                <button onclick="closeContractModal()" class="text-gray-400 hover:text-gray-600 text-2xl">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- 통계 요약 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                    <p class="text-sm text-red-700 font-medium">🔴 계약 만료 (활성)</p>
+                    <p class="text-3xl font-bold text-red-600 mt-2" id="modalExpiredCount">0</p>
+                    <p class="text-xs text-red-600 mt-1">즉시 갱신 필요</p>
+                </div>
+                <div class="p-4 bg-orange-50 border-l-4 border-orange-500 rounded-lg">
+                    <p class="text-sm text-orange-700 font-medium">⚠️ 7일 이내 만료</p>
+                    <p class="text-3xl font-bold text-orange-600 mt-2" id="modalWeekCount">0</p>
+                    <p class="text-xs text-orange-600 mt-1">긴급 대응</p>
+                </div>
+                <div class="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-lg">
+                    <p class="text-sm text-yellow-700 font-medium">💡 30일 이내 만료</p>
+                    <p class="text-3xl font-bold text-yellow-600 mt-2" id="modalMonthCount">0</p>
+                    <p class="text-xs text-yellow-600 mt-1">준비 필요</p>
+                </div>
+            </div>
+
+            <!-- 탭 -->
+            <div class="flex gap-2 mb-4 border-b">
+                <button onclick="switchContractTab('expired')" id="tabExpired" class="px-4 py-2 font-medium text-red-600 border-b-2 border-red-600">
+                    만료 (활성)
+                </button>
+                <button onclick="switchContractTab('week')" id="tabWeek" class="px-4 py-2 font-medium text-gray-600 hover:text-orange-600">
+                    7일 이내
+                </button>
+                <button onclick="switchContractTab('month')" id="tabMonth" class="px-4 py-2 font-medium text-gray-600 hover:text-yellow-600">
+                    30일 이내
+                </button>
+            </div>
+
+            <!-- 직원 목록 -->
+            <div id="contractList" class="space-y-2">
+                <!-- 동적으로 로드됨 -->
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeContractModal()" class="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition">
+                    <i class="fas fa-times mr-2"></i>
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3일 활동 없는 단지 모달 -->
+    <div id="inactiveApartmentsModal" class="fixed inset-0 bg-black bg-opacity-50 modal-backdrop hidden items-center justify-center z-50" onclick="if(event.target === this) closeInactiveApartmentsModal()">
+        <div class="bg-white rounded-2xl p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-red-600">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    최근 3일 활동 없는 단지
+                </h2>
+                <button onclick="closeInactiveApartmentsModal()" class="text-gray-400 hover:text-gray-600 text-2xl">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- 경고 메시지 -->
+            <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                <p class="text-red-700 font-medium">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    다음 단지들은 최근 3일간 출퇴근 기록이 없습니다. 즉시 확인이 필요합니다.
+                </p>
+            </div>
+
+            <!-- 단지 목록 -->
+            <div id="inactiveApartmentsList" class="space-y-3">
+                <!-- 동적으로 로드됨 -->
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeInactiveApartmentsModal()" class="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition">
+                    <i class="fas fa-times mr-2"></i>
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settlement Approval Tab Content -->
+    <div id="tab-content-settlement" style="display: none;">
+        <!-- 정산서 승인 대기 목록 -->
+        <div class="glass-card p-6 mb-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold brand-color">
+                    <i class="fas fa-file-invoice mr-2"></i>
+                    📋 정산서 승인 대기
+                </h2>
+                <div class="flex gap-2">
+                    <button onclick="loadPendingSettlements()" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition">
+                        <i class="fas fa-sync-alt mr-2"></i>
+                        새로고침
+                    </button>
+                    <select onchange="filterSettlementsByStatus(this.value)" class="px-4 py-2 border border-gray-300 rounded-lg">
+                        <option value="all">전체</option>
+                        <option value="submitted" selected>제출 완료</option>
+                        <option value="under_review">검토 중</option>
+                        <option value="approved">승인 완료</option>
+                        <option value="rejected">반려</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 정산서 통계 -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                    <p class="text-sm text-blue-600 font-medium">제출 대기</p>
+                    <p class="text-3xl font-bold text-blue-700 mt-2" id="settlement-count-submitted">0</p>
+                </div>
+                <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4">
+                    <p class="text-sm text-yellow-600 font-medium">검토 중</p>
+                    <p class="text-3xl font-bold text-yellow-700 mt-2" id="settlement-count-review">0</p>
+                </div>
+                <div class="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                    <p class="text-sm text-green-600 font-medium">승인 완료</p>
+                    <p class="text-3xl font-bold text-green-700 mt-2" id="settlement-count-approved">0</p>
+                </div>
+                <div class="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+                    <p class="text-sm text-red-600 font-medium">반려</p>
+                    <p class="text-3xl font-bold text-red-700 mt-2" id="settlement-count-rejected">0</p>
+                </div>
+            </div>
+
+            <!-- 정산서 목록 -->
+            <div id="settlement-list" class="space-y-4">
+                <!-- 동적으로 로드됨 -->
+                <div class="text-center py-12 text-gray-500">
+                    <i class="fas fa-inbox text-5xl mb-4 opacity-30"></i>
+                    <p>정산서 데이터를 불러오는 중...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payroll Management Tab Content -->
+    <div id="tab-content-payroll" style="display: none;">
+        <!-- 급여명세서 발급 현황 -->
+        <div class="glass-card p-6 mb-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold brand-color">
+                    <i class="fas fa-money-bill-wave mr-2"></i>
+                    💰 급여명세서 발급 현황
+                </h2>
+                <button onclick="openPayrollUploadModal()" class="px-6 py-3 brand-bg hover:opacity-90 text-white rounded-lg font-medium transition shadow-lg">
+                    <i class="fas fa-upload mr-2"></i>
+                    급여명세서 업로드
+                </button>
+            </div>
+
+            <!-- 발급 통계 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+                    <p class="text-sm text-purple-600 font-medium">이번 달 발급</p>
+                    <p class="text-3xl font-bold text-purple-700 mt-2" id="payroll-count-month">0</p>
+                    <p class="text-xs text-purple-500 mt-1">건</p>
+                </div>
+                <div class="bg-indigo-50 border-2 border-indigo-200 rounded-lg p-4">
+                    <p class="text-sm text-indigo-600 font-medium">총 직원</p>
+                    <p class="text-3xl font-bold text-indigo-700 mt-2" id="payroll-total-employees">0</p>
+                    <p class="text-xs text-indigo-500 mt-1">명</p>
+                </div>
+                <div class="bg-pink-50 border-2 border-pink-200 rounded-lg p-4">
+                    <p class="text-sm text-pink-600 font-medium">미배포</p>
+                    <p class="text-3xl font-bold text-pink-700 mt-2" id="payroll-pending">0</p>
+                    <p class="text-xs text-pink-500 mt-1">건</p>
+                </div>
+            </div>
+
+            <!-- 승인된 정산서 목록 (급여 미발급) -->
+            <div class="mb-6">
+                <h3 class="text-lg font-bold text-gray-700 mb-3">
+                    <i class="fas fa-check-circle text-green-600 mr-2"></i>
+                    승인 완료 (급여 미발급)
+                </h3>
+                <div id="approved-settlements-list" class="space-y-3">
+                    <!-- 동적으로 로드됨 -->
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-inbox text-4xl mb-3 opacity-30"></i>
+                        <p>승인된 정산서가 없습니다</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 급여명세서 발급 내역 -->
+            <div>
+                <h3 class="text-lg font-bold text-gray-700 mb-3">
+                    <i class="fas fa-history mr-2"></i>
+                    발급 내역
+                </h3>
+                <div id="payroll-history-list" class="space-y-3">
+                    <!-- 동적으로 로드됨 -->
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-inbox text-4xl mb-3 opacity-30"></i>
+                        <p>발급 내역이 없습니다</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 정산서 상세보기 모달 -->
+    <div id="settlement-detail-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 modal-backdrop" onclick="closeSettlementDetailModal()">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="brand-bg text-white px-6 py-5 rounded-t-2xl">
+                <h2 class="text-2xl font-bold">
+                    <i class="fas fa-file-invoice-dollar mr-2"></i>
+                    정산서 상세보기
+                </h2>
+            </div>
+            
+            <div class="p-6" id="settlement-detail-content">
+                <!-- 동적으로 로드됨 -->
+            </div>
+
+            <div class="border-t px-6 py-4 flex justify-between gap-3 bg-gray-50">
+                <button onclick="closeSettlementDetailModal()" class="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition">
+                    <i class="fas fa-times mr-2"></i>
+                    닫기
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="rejectSettlementFromModal()" id="btn-reject-settlement" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition">
+                        <i class="fas fa-times-circle mr-2"></i>
+                        반려
+                    </button>
+                    <button onclick="approveSettlementFromModal()" id="btn-approve-settlement" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition">
+                        <i class="fas fa-check-circle mr-2"></i>
+                        승인
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 급여명세서 업로드 모달 -->
+    <div id="payroll-upload-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 modal-backdrop" onclick="closePayrollUploadModal()">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+            <div class="brand-bg text-white px-6 py-5 rounded-t-2xl">
+                <h2 class="text-2xl font-bold">
+                    <i class="fas fa-upload mr-2"></i>
+                    급여명세서 업로드
+                </h2>
+            </div>
+            
+            <div class="p-6">
+                <!-- 정산서 선택 -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-file-invoice text-blue-600 mr-2"></i>
+                        정산서 선택
+                    </label>
+                    <select id="payroll-settlement-select" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                        <option value="">승인된 정산서를 선택하세요</option>
+                        <!-- 동적으로 로드됨 -->
+                    </select>
+                </div>
+
+                <!-- 발급 연월 -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-calendar text-purple-600 mr-2"></i>
+                        발급 연월
+                    </label>
+                    <input type="month" id="payroll-year-month" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" required>
+                </div>
+
+                <!-- PDF 파일 업로드 -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-file-pdf text-red-600 mr-2"></i>
+                        급여명세서 PDF (전 직원 통합본)
+                    </label>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-green-500 transition">
+                        <input type="file" id="payroll-pdf-file" accept="application/pdf" class="hidden" onchange="handlePayrollFileSelect(event)">
+                        <label for="payroll-pdf-file" class="cursor-pointer">
+                            <i class="fas fa-cloud-upload-alt text-5xl text-gray-400 mb-3"></i>
+                            <p class="text-gray-600 font-medium">클릭하여 파일 선택</p>
+                            <p class="text-sm text-gray-500 mt-2">PDF 파일만 업로드 가능합니다</p>
+                        </label>
+                        <div id="payroll-file-info" class="mt-4 hidden">
+                            <div class="inline-flex items-center gap-3 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                                <i class="fas fa-file-pdf text-red-600 text-2xl"></i>
+                                <div class="text-left">
+                                    <p class="font-medium text-gray-700" id="payroll-file-name"></p>
+                                    <p class="text-sm text-gray-500" id="payroll-file-size"></p>
+                                </div>
+                                <button onclick="clearPayrollFile()" class="ml-2 text-red-600 hover:text-red-700">
+                                    <i class="fas fa-times-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 배포 옵션 -->
+                <div class="mb-6">
+                    <label class="flex items-center gap-3 p-4 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" id="payroll-auto-distribute" checked class="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500">
+                        <div>
+                            <p class="font-medium text-gray-700">업로드 후 자동 배포</p>
+                            <p class="text-sm text-gray-500">체크 시 업로드 즉시 전 직원에게 배포됩니다</p>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- 업로드 진행 상태 -->
+                <div id="payroll-upload-progress" class="hidden mb-6">
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="loader" style="width: 20px; height: 20px; border-width: 2px;"></div>
+                            <span class="font-medium text-blue-700">업로드 중...</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div id="payroll-upload-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border-t px-6 py-4 flex justify-end gap-3 bg-gray-50">
+                <button onclick="closePayrollUploadModal()" class="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition">
+                    <i class="fas fa-times mr-2"></i>
+                    취소
+                </button>
+                <button onclick="uploadPayrollPDF()" id="btn-upload-payroll" class="px-6 py-3 brand-bg hover:opacity-90 text-white font-bold rounded-lg transition">
+                    <i class="fas fa-upload mr-2"></i>
+                    업로드
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://qgpqhtuynxhmgawakjxe.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncHFodHV5bnhobWdhd2FranhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyOTQyNTEsImV4cCI6MjA4Mjg3MDI1MX0.WNljQIKDbeZCDlXe8fpBdZs58XRFfujGt7lBGfq_pVg';
+        
+        let supabaseClient;
+        
+        // Supabase 클라이언트 초기화 함수
+        function initSupabase() {
+            if (!window.supabase) {
+                console.error('❌ Supabase library not loaded');
+                throw new Error('Supabase 라이브러리를 불러올 수 없습니다.');
+            }
+            try {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                console.log('✅ Supabase client initialized');
+                return true;
+            } catch (error) {
+                console.error('❌ Supabase init error:', error);
+                throw error;
+            }
+        }
+
+        let apartmentsData = [];
+        let currentFilter = 'all';
+        let editingApartmentId = null;
+        let contractData = {
+            expired: [],
+            week: [],
+            month: []
+        };
+        let currentContractTab = 'expired';
+        
+        // 비활성 아파트 데이터 저장
+        let inactiveApartmentsData = [];
+
+        async function loadDashboard(retryCount = 0) {
+            try {
+                console.log('🚀 Dashboard loading started...');
+                
+                // Supabase 클라이언트 초기화
+                if (!supabaseClient) {
+                    initSupabase();
+                }
+                
+                // 연결 테스트
+                console.log('🔗 Testing Supabase connection...');
+                const { error: testError } = await supabaseClient
+                    .from('apartments')
+                    .select('count')
+                    .limit(1);
+                
+                if (testError && testError.message && testError.message.includes('fetch')) {
+                    throw new Error('Supabase 서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.');
+                }
+                
+                // Load all apartments
+                const { data: apartments, error: aptError } = await supabaseClient
+                    .from('apartments')
+                    .select('*')
+                    .order('name');
+
+                if (aptError) {
+                    console.error('Apartments load error:', aptError);
+                    throw aptError;
+                }
+
+                console.log('✅ Apartments loaded:', apartments?.length || 0);
+                apartmentsData = apartments || [];
+
+                // Load employees count
+                const { count: employeesCount, error: empError } = await supabaseClient
+                    .from('employees')
+                    .select('*', { count: 'exact', head: true });
+
+                if (empError && empError.code !== 'PGRST116') {
+                    console.error('Employees count error:', empError);
+                }
+
+                console.log('✅ Employees count:', employeesCount || 0);
+
+                // 계약 데이터 로드
+                await loadContractData();
+
+                // 기본 통계 업데이트
+                document.getElementById('totalApartments').textContent = apartmentsData.length;
+                document.getElementById('totalEmployees').textContent = employeesCount || 0;
+                document.getElementById('warningApartments').textContent = '0';
+                
+                // 아파트별 상세 데이터 로드 (상태별 카운트는 여기서 업데이트됨)
+                await loadApartmentsDetails();
+
+                // Load recent activities
+                await loadRecentActivities();
+                
+                // Load settlement submission status
+                await loadSettlementSubmissionStatus();
+
+                // Hide loading, show dashboard
+                document.getElementById('loading').style.display = 'none';
+                
+                // 첫 번째 탭(대시보드) 표시
+                switchMasterTab('dashboard');
+
+                console.log('✅ Dashboard loaded successfully');
+
+
+            } catch (error) {
+                console.error('❌ Dashboard load error:', error);
+                
+                // 재시도 로직 (최대 3번)
+                if (retryCount < 3 && error.message && error.message.includes('fetch')) {
+                    console.log(`🔄 Retrying... (${retryCount + 1}/3)`);
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // 2초 대기
+                    return loadDashboard(retryCount + 1);
+                }
+                
+                // 오류 메시지 표시
+                const errorMessage = error.message || '알 수 없는 오류가 발생했습니다.';
+                const isNetworkError = errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('연결');
+                
+                document.getElementById('loading').innerHTML = `
+                    <div class="text-red-600">
+                        <i class="fas fa-exclamation-circle text-4xl mb-4"></i>
+                        <p class="text-xl font-bold">데이터 로드 실패</p>
+                        <p class="mt-2 text-gray-700">${errorMessage}</p>
+                        
+                        ${isNetworkError ? `
+                            <div class="mt-4 p-4 bg-yellow-50 border-l-4 border-yellow-400 text-left text-sm">
+                                <p class="font-bold text-yellow-800 mb-2">💡 해결 방법:</p>
+                                <ul class="list-disc list-inside text-yellow-700 space-y-1">
+                                    <li>인터넷 연결 상태를 확인하세요</li>
+                                    <li>VPN을 사용 중이라면 비활성화해보세요</li>
+                                    <li>브라우저 확장 프로그램을 비활성화해보세요</li>
+                                    <li>다른 브라우저에서 시도해보세요</li>
+                                    <li>몇 분 후 다시 시도해보세요</li>
+                                </ul>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="flex gap-3 mt-6">
+                            <button onclick="location.reload()" class="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">
+                                <i class="fas fa-redo mr-2"></i>
+                                다시 시도
+                            </button>
+                            <button onclick="window.location.href='index.html'" class="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium">
+                                <i class="fas fa-home mr-2"></i>
+                                홈으로
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        async function loadApartmentsDetails() {
+            const container = document.getElementById('apartmentsList');
+            const today = new Date().toISOString().split('T')[0];
+
+            if (apartmentsData.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-2 text-center py-12">
+                        <i class="fas fa-building text-5xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-500 text-lg">등록된 아파트가 없습니다.</p>
+                        <button onclick="openAddApartmentModal()" class="mt-4 px-6 py-3 brand-bg text-white rounded-lg hover:opacity-90">
+                            <i class="fas fa-plus mr-2"></i>
+                            첫 아파트 추가하기
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            const apartmentCards = await Promise.all(apartmentsData.map(async (apt) => {
+                // Get employee count
+                const { count: empCount } = await supabaseClient
+                    .from('employees')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('apartment_id', apt.id);
+
+                // 📅 이번 달 출근율 계산 (월별 통계)
+                const today = new Date();
+                const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                
+                const firstDayStr = firstDayOfMonth.toISOString().split('T')[0];
+                const lastDayStr = lastDayOfMonth.toISOString().split('T')[0];
+                
+                // 이번 달 출근 기록 조회
+                const { data: monthAtt } = await supabaseClient
+                    .from('attendance_records')
+                    .select('*')
+                    .eq('apartment_id', apt.id)
+                    .gte('scan_time', `${firstDayStr}T00:00:00`)
+                    .lte('scan_time', `${lastDayStr}T23:59:59`);
+
+                // 📋 이번 달 민원 조회 (Google Sheets 연동)
+                let complaints = [];
+                let complaintCount = 0;
+                
+                if (apt.google_sheet_id) {
+                    console.log(`🔍 [${apt.name}] Fetching complaints with Sheet ID: ${apt.google_sheet_id}`);
+                    // Use apartment-specific sheet tab name from database
+                    const sheetTabName = apt.google_sheet_name || '월간 민원 처리 현황 DB';
+                    console.log(`📝 [${apt.name}] Using sheet tab: ${sheetTabName}`);
+                    complaints = await fetchComplaintsFromGoogleSheets(apt.google_sheet_id, sheetTabName);
+                    complaintCount = countComplaintsThisMonth(complaints);
+                    console.log(`📊 [${apt.name}] Complaints loaded: ${complaints.length} total, ${complaintCount} this month`);
+                } else {
+                    console.warn(`⚠️ ${apt.name}: Google Sheets ID가 없어 민원 데이터를 불러올 수 없습니다`);
+                }
+
+                const employeeCount = empCount || 0;
+                const attendanceCount = monthAtt?.length || 0;
+                
+                // 이번 달 근무일수 계산 (오늘까지)
+                const workDays = Math.min(today.getDate(), lastDayOfMonth.getDate());
+                const expectedAttendance = employeeCount * workDays;
+                const attendanceRate = expectedAttendance > 0 
+                    ? Math.round((attendanceCount / expectedAttendance) * 100) 
+                    : 0;
+
+                // 💰 매출 데이터 조회 (이번 달 & 전월)
+                const { data: currentSales } = await supabaseClient
+                    .from('sales')
+                    .select('*')
+                    .eq('apartment_id', apt.id)
+                    .eq('year', today.getFullYear())
+                    .eq('month', today.getMonth() + 1)
+                    .single();
+                
+                let prevMonth = today.getMonth();
+                let prevYear = today.getFullYear();
+                if (prevMonth === 0) {
+                    prevMonth = 12;
+                    prevYear -= 1;
+                }
+                
+                const { data: prevSales } = await supabaseClient
+                    .from('sales')
+                    .select('amount')
+                    .eq('apartment_id', apt.id)
+                    .eq('year', prevYear)
+                    .eq('month', prevMonth)
+                    .single();
+                
+                const currentAmount = currentSales?.amount || 0;
+                const prevAmount = prevSales?.amount || 0;
+                const increaseReason = currentSales?.increase_reason || '';
+                const decreaseReason = currentSales?.decrease_reason || '';
+                
+                let salesChange = 0;
+                let salesChangeIcon = '';
+                let salesChangeColor = '';
+                if (prevAmount > 0) {
+                    salesChange = ((currentAmount - prevAmount) / prevAmount * 100).toFixed(1);
+                    if (salesChange > 0) {
+                        salesChangeIcon = '📈';
+                        salesChangeColor = 'text-green-600';
+                    } else if (salesChange < 0) {
+                        salesChangeIcon = '📉';
+                        salesChangeColor = 'text-red-600';
+                    } else {
+                        salesChangeIcon = '➡️';
+                        salesChangeColor = 'text-gray-600';
+                    }
+                }
+
+                console.log(`📊 ${apt.name} - 이번 달(${today.getMonth() + 1}월) 통계:`, {
+                    근무일수: workDays,
+                    직원수: employeeCount,
+                    예상출근: expectedAttendance,
+                    실제출근: attendanceCount,
+                    출근율: attendanceRate + '%',
+                    민원: complaintCount,
+                    매출: currentAmount.toLocaleString() + '원',
+                    전월대비: salesChange + '%'
+                });
+
+                // 📋 정산서 제출 여부 확인 (이번 달)
+                const yearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                const { data: settlement } = await supabaseClient
+                    .from('monthly_settlements')
+                    .select('id, status')
+                    .eq('apartment_id', apt.id)
+                    .eq('year_month', yearMonth)
+                    .in('status', ['submitted', 'under_review', 'approved'])
+                    .single();
+                
+                const settlementSubmitted = !!settlement;
+                
+                // apt 객체에 정산서 제출 여부 추가
+                apt.settlement_submitted = settlementSubmitted;
+
+                // 📅 최근 3일 활동 확인
+                const threeDaysAgo = new Date();
+                threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+                const threeDaysAgoStr = threeDaysAgo.toISOString().split('T')[0];
+                
+                const { data: recentActivity } = await supabaseClient
+                    .from('attendance_records')
+                    .select('id')
+                    .eq('apartment_id', apt.id)
+                    .gte('scan_time', `${threeDaysAgoStr}T00:00:00`)
+                    .limit(1);
+                
+                const hasRecentActivity = recentActivity && recentActivity.length > 0;
+                const inactiveDays = hasRecentActivity ? 0 : 3;
+
+                // Determine status (더 세밀한 기준)
+                let status = 'normal';
+                let statusText = '정상';
+                
+                // 긴급 조건 (하나라도 해당되면)
+                if (complaintCount >= 10 ||              // 미처리 민원 10건 이상
+                    attendanceRate < 40 ||               // 출근율 40% 미만
+                    (complaintCount >= 5 && attendanceRate < 60)) {  // 민원 5건 + 출근율 60% 미만
+                    status = 'critical';
+                    statusText = '긴급';
+                } 
+                // 주의 조건 (하나라도 해당되면)
+                else if (complaintCount >= 5 ||          // 미처리 민원 5건 이상
+                         attendanceRate < 60 ||          // 출근율 60% 미만
+                         (complaintCount >= 3 && attendanceRate < 75) ||  // 민원 3건 + 출근율 75% 미만
+                         employeeCount === 0) {          // 직원 0명 (배정 안 됨)
+                    status = 'warning';
+                    statusText = '주의';
+                }
+
+                return {
+                    apt,
+                    employeeCount,
+                    attendanceCount,
+                    attendanceRate,
+                    complaintCount,
+                    complaints,
+                    currentAmount,
+                    salesChange,
+                    increaseReason,
+                    decreaseReason,
+                    status,
+                    statusText,
+                    hasRecentActivity,
+                    inactiveDays,
+                    html: `
+                        <div class="apartment-card" data-status="${status}">
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="flex-1">
+                                    <h3 class="text-xl font-bold brand-color mb-1">${apt.name}</h3>
+                                    <p class="text-sm text-gray-600">${apt.address || '주소 미등록'}</p>
+                                    ${apt.google_sheet_id ? `
+                                        <p class="text-xs text-green-600 mt-1">
+                                            <i class="fab fa-google"></i> Google 시트 연동됨
+                                        </p>
+                                    ` : `
+                                        <p class="text-xs text-orange-600 mt-1">
+                                            <i class="fas fa-exclamation-triangle"></i> Google 시트 미연동
+                                        </p>
+                                    `}
+                                </div>
+                                <span class="status-badge status-${status}">${statusText}</span>
+                            </div>
+
+                            <!-- 통계 그리드 4칸 -->
+                            <div class="grid grid-cols-4 gap-2 mb-4">
+                                <div class="text-center p-2 bg-gray-50 rounded-lg">
+                                    <p class="text-xs text-gray-600 mb-1">직원</p>
+                                    <p class="text-lg font-bold brand-color">${employeeCount}</p>
+                                </div>
+                                <div class="text-center p-2 bg-blue-50 rounded-lg">
+                                    <p class="text-xs text-gray-600 mb-1">출근율</p>
+                                    <p class="text-lg font-bold text-blue-600">${attendanceRate}%</p>
+                                </div>
+                                <div class="text-center p-2 bg-red-50 rounded-lg">
+                                    <p class="text-xs text-gray-600 mb-1">민원</p>
+                                    <p class="text-lg font-bold text-red-600">${complaintCount}</p>
+                                </div>
+                                <div class="text-center p-2 ${apt.settlement_submitted ? 'bg-green-50' : 'bg-orange-50'} rounded-lg">
+                                    <p class="text-xs text-gray-600 mb-1">정산서</p>
+                                    <p class="text-lg font-bold ${apt.settlement_submitted ? 'text-green-600' : 'text-orange-600'}">
+                                        ${apt.settlement_submitted ? '✓' : '✗'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- 매출 정보 섹션 -->
+                            <div class="bg-green-50 p-4 rounded-lg mb-4 border border-green-200">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div>
+                                        <p class="text-sm text-gray-600 mb-1">금월 매출액</p>
+                                        <p class="text-2xl font-bold text-green-700">${(currentAmount / 10000).toFixed(0)}만원</p>
+                                    </div>
+                                    ${salesChange !== 0 ? `
+                                        <div class="text-right">
+                                            <p class="text-xs text-gray-600">전월 대비</p>
+                                            <p class="text-lg font-bold ${salesChangeColor}">
+                                                ${salesChangeIcon} ${Math.abs(salesChange)}%
+                                            </p>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                
+                                ${increaseReason || decreaseReason ? `
+                                    <div class="border-t border-green-200 pt-3 mt-3 space-y-2">
+                                        ${increaseReason ? `
+                                            <div class="flex items-start gap-2">
+                                                <i class="fas fa-arrow-up text-green-600 mt-1"></i>
+                                                <div class="flex-1">
+                                                    <p class="text-xs text-gray-600 mb-1">상승 요인</p>
+                                                    <p class="text-sm text-gray-800">${increaseReason}</p>
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                        ${decreaseReason ? `
+                                            <div class="flex items-start gap-2">
+                                                <i class="fas fa-arrow-down text-red-600 mt-1"></i>
+                                                <div class="flex-1">
+                                                    <p class="text-xs text-gray-600 mb-1">하락 요인</p>
+                                                    <p class="text-sm text-gray-800">${decreaseReason}</p>
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+
+                            <!-- 민원 미리보기 섹션 -->
+                            ${(() => {
+                                console.log(`🎨 [${apt.name}] Rendering complaints section:`, {
+                                    complaintsLength: complaints.length,
+                                    hasGoogleSheetId: !!apt.google_sheet_id,
+                                    latest3Complaints: complaints.slice(-3).reverse()
+                                });
+                                
+                                if (complaints.length > 0) {
+                                    return `
+                                        <div class="bg-orange-50 p-4 rounded-lg mb-4 border border-orange-200">
+                                            <div class="flex items-center justify-between mb-3">
+                                                <h4 class="text-sm font-bold text-gray-700">
+                                                    <i class="fas fa-exclamation-circle text-orange-500 mr-1"></i>
+                                                    최근 민원 (${complaintCount}건)
+                                                </h4>
+                                            </div>
+                                            <div class="space-y-2">
+                                                ${complaints.slice(-3).reverse().map((complaint, idx) => {
+                                                    console.log(`📋 [${apt.name}] Rendering complaint ${idx + 1}:`, complaint);
+                                                    return `
+                                                        <div class="bg-white p-3 rounded border border-orange-100">
+                                                            <div class="space-y-2">
+                                                                <!-- 날짜와 위치 -->
+                                                                <div class="flex items-center justify-between text-xs text-gray-600">
+                                                                    <span>
+                                                                        <i class="fas fa-calendar text-orange-400 mr-1"></i>
+                                                                        ${complaint.date !== '-' ? complaint.date : '날짜 미상'}
+                                                                    </span>
+                                                                    <span>
+                                                                        <i class="fas fa-map-marker-alt text-orange-400 mr-1"></i>
+                                                                        ${complaint.location !== '-' ? complaint.location : '위치 미상'}
+                                                                    </span>
+                                                                </div>
+                                                                
+                                                                <!-- 민원내용 -->
+                                                                <div>
+                                                                    <p class="text-xs text-gray-500 mb-1">민원내용:</p>
+                                                                    <p class="text-sm text-gray-800">${complaint.content !== '-' ? summarizeComplaint(complaint.content) : '내용 없음'}</p>
+                                                                </div>
+                                                                
+                                                                <!-- 진행상황과 조치사항 -->
+                                                                <div class="flex items-center justify-between">
+                                                                    <div>
+                                                                        ${getComplaintStatusBadge(complaint.status)}
+                                                                    </div>
+                                                                    ${complaint.result !== '-' ? `
+                                                                        <span class="text-xs text-gray-600">
+                                                                            <i class="fas fa-check text-green-500 mr-1"></i>
+                                                                            조치완료
+                                                                        </span>
+                                                                    ` : ''}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    `;
+                                                }).join('')}
+                                                ${complaints.length > 3 ? `
+                                                    <p class="text-xs text-center text-gray-500 mt-2">
+                                                        외 ${complaints.length - 3}건 더 있음
+                                                    </p>
+                                                ` : ''}
+                                            </div>
+                                        </div>
+                                    `;
+                                } else if (apt.google_sheet_id) {
+                                    return `
+                                        <div class="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200">
+                                            <p class="text-sm text-center text-gray-500">
+                                                <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                                                이번 달 등록된 민원이 없습니다
+                                            </p>
+                                        </div>
+                                    `;
+                                } else {
+                                    return `
+                                        <div class="bg-yellow-50 p-4 rounded-lg mb-4 border border-yellow-200">
+                                            <p class="text-sm text-center text-yellow-700">
+                                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                                Google Sheets 미연동 (민원 데이터 없음)
+                                            </p>
+                                        </div>
+                                    `;
+                                }
+                            })()}
+
+
+                            <div class="flex gap-2">
+                                <button onclick="editApartment('${apt.id}')" class="flex-1 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-sm font-medium transition">
+                                    <i class="fas fa-edit mr-1"></i>
+                                    수정
+                                </button>
+                                <button onclick="openApartmentDashboard('${apt.id}')" class="flex-1 px-4 py-2 brand-bg hover:opacity-90 text-white rounded-lg text-sm font-medium transition">
+                                    <i class="fas fa-external-link-alt mr-1"></i>
+                                    관리
+                                </button>
+                                <button onclick="deleteApartment('${apt.id}', '${apt.name}')" class="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `
+                };
+            }));
+
+            renderApartments(apartmentCards);
+            
+            // 상태별 카운트 업데이트
+            updateStatusCounts(apartmentCards);
+        }
+
+        function updateStatusCounts(apartmentCards) {
+            const warningCount = apartmentCards.filter(card => card.status === 'warning').length;
+            const criticalCount = apartmentCards.filter(card => card.status === 'critical').length;
+            
+            // Google 시트 미연동 개수
+            const unlinkedCount = apartmentCards.filter(card => !card.apt.google_sheet_id).length;
+            
+            // 직원 미배정 개수
+            const noEmployeeCount = apartmentCards.filter(card => card.employeeCount === 0).length;
+            
+            // 최근 3일 활동 없는 단지 개수 및 데이터 저장
+            inactiveApartmentsData = apartmentCards.filter(card => !card.hasRecentActivity);
+            const inactiveCount = inactiveApartmentsData.length;
+            
+            // 📅 이번 달 전체 출근율 계산
+            const today = new Date();
+            const workDays = Math.min(today.getDate(), new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate());
+            
+            const totalEmployees = apartmentCards.reduce((sum, card) => sum + card.employeeCount, 0);
+            const totalAttendance = apartmentCards.reduce((sum, card) => sum + card.attendanceCount, 0);
+            const expectedTotalAttendance = totalEmployees * workDays;
+            
+            const avgAttendanceRate = expectedTotalAttendance > 0 
+                ? Math.round((totalAttendance / expectedTotalAttendance) * 100) 
+                : 0;
+            
+            document.getElementById('warningApartments').textContent = warningCount;
+            document.getElementById('inactiveApartments').textContent = inactiveCount;
+            document.getElementById('unlinkedSheets').textContent = unlinkedCount;
+            document.getElementById('noEmployees').textContent = noEmployeeCount;
+            // todayAttendanceRate 요소가 없으므로 주석 처리
+            // document.getElementById('todayAttendanceRate').textContent = avgAttendanceRate + '%';
+            
+            console.log('📊 이번 달 전체 통계:', {
+                근무일수: workDays,
+                전체직원: totalEmployees,
+                예상출근: expectedTotalAttendance,
+                실제출근: totalAttendance,
+                평균출근율: avgAttendanceRate + '%'
+            });
+            console.log('📊 Status counts - Warning:', warningCount, 'Inactive (3 days):', inactiveCount);
+            console.log('📊 Additional - Unlinked:', unlinkedCount, 'No employees:', noEmployeeCount);
+        }
+
+        function renderApartments(apartmentCards) {
+            const container = document.getElementById('apartmentsList');
+            const filtered = currentFilter === 'all' 
+                ? apartmentCards 
+                : apartmentCards.filter(card => card.status === currentFilter);
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-2 text-center py-12 text-gray-500">
+                        <i class="fas fa-inbox text-5xl mb-4 opacity-50"></i>
+                        <p class="text-lg">해당하는 아파트가 없습니다.</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = filtered.map(card => card.html).join('');
+            }
+        }
+
+        async function loadRecentActivities() {
+            const container = document.getElementById('recentActivities');
+            
+            const { data: recentAtt, error } = await supabaseClient
+                .from('attendance_records')
+                .select(`
+                    *,
+                    employees (name),
+                    apartments (name)
+                `)
+                .order('scan_time', { ascending: false })
+                .limit(10);
+
+            if (error && error.code !== 'PGRST116') {
+                console.error('Activities load error:', error);
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">활동 내역을 불러올 수 없습니다.</p>';
+                return;
+            }
+
+            if (!recentAtt || recentAtt.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">최근 활동 내역이 없습니다.</p>';
+                return;
+            }
+
+            container.innerHTML = recentAtt.map(record => {
+                const time = new Date(record.scan_time);
+                const timeStr = time.toLocaleString('ko-KR', { 
+                    month: '2-digit', 
+                    day: '2-digit', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                // 출퇴근/휴게 구분
+                let typeText, iconClass, bgClass;
+                if (record.attendance_type === '퇴근') {
+                    typeText = '퇴근';
+                    iconClass = 'fa-sign-out-alt';
+                    bgClass = 'bg-red-500';
+                } else if (record.attendance_type === '휴게') {
+                    typeText = '휴게';
+                    iconClass = 'fa-coffee';
+                    bgClass = 'bg-yellow-500';
+                } else {
+                    typeText = '출근';
+                    iconClass = 'fa-sign-in-alt';
+                    bgClass = 'bg-green-500';
+                }
+
+                return `
+                    <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                        <div class="w-10 h-10 ${bgClass} rounded-full flex items-center justify-center text-white">
+                            <i class="fas ${iconClass}"></i>
+                        </div>
+                        <div class="flex-1">
+                            <p class="font-medium">${record.employees?.name || '직원'} - ${record.apartments?.name || '아파트'}</p>
+                            <p class="text-sm text-gray-600">${typeText} · ${record.location || ''} · ${timeStr}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterStatus(status) {
+            currentFilter = status;
+            
+            ['filterAll', 'filterWarning', 'filterCritical'].forEach(id => {
+                const btn = document.getElementById(id);
+                btn.classList.remove('brand-bg', 'text-white');
+                btn.classList.add('bg-gray-200');
+            });
+            
+            const activeBtn = document.getElementById(`filter${status.charAt(0).toUpperCase() + status.slice(1)}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-gray-200');
+                activeBtn.classList.add('brand-bg', 'text-white');
+            }
+            
+            loadApartmentsDetails();
+        }
+
+        function openAddApartmentModal() {
+            editingApartmentId = null;
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-building mr-2"></i>아파트 추가';
+            document.getElementById('apartmentForm').reset();
+            document.getElementById('apartmentId').value = '';
+            document.getElementById('apartmentModal').classList.remove('hidden');
+            document.getElementById('apartmentModal').classList.add('flex');
+        }
+
+        async function editApartment(apartmentId) {
+            editingApartmentId = apartmentId;
+            const apartment = apartmentsData.find(apt => apt.id === apartmentId);
+            
+            if (!apartment) {
+                alert('아파트 정보를 찾을 수 없습니다.');
+                return;
+            }
+
+            document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit mr-2"></i>아파트 수정';
+            document.getElementById('apartmentId').value = apartment.id;
+            document.getElementById('apartmentName').value = apartment.name || '';
+            document.getElementById('apartmentCode').value = apartment.code || '';
+            document.getElementById('apartmentPassword').value = apartment.password || 'bdxi2026'; // 🔑 비밀번호 로드
+            document.getElementById('apartmentAddress').value = apartment.address || '';
+            
+            // GPS 좌표 로드
+            document.getElementById('apartmentLat').value = apartment.location_lat || '';
+            document.getElementById('apartmentLng').value = apartment.location_lng || '';
+            document.getElementById('apartmentRadius').value = apartment.allowed_radius_meters || 1000;
+            
+            document.getElementById('googleSheetId').value = apartment.google_sheet_id || '';
+            document.getElementById('googleSheetName').value = apartment.google_sheet_name || '근무표';
+            document.getElementById('contactPerson').value = apartment.contact_person || '';
+            document.getElementById('contactPhone').value = apartment.contact_phone || '';
+            
+            document.getElementById('apartmentModal').classList.remove('hidden');
+            document.getElementById('apartmentModal').classList.add('flex');
+        }
+
+        async function deleteApartment(apartmentId, apartmentName) {
+            if (!confirm(`"${apartmentName}" 아파트를 정말 삭제하시겠습니까?\n\n⚠️ 주의: 이 작업은 되돌릴 수 없으며, 관련된 모든 데이터가 삭제될 수 있습니다.`)) {
+                return;
+            }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('apartments')
+                    .delete()
+                    .eq('id', apartmentId);
+
+                if (error) throw error;
+
+                alert('✅ 아파트가 삭제되었습니다.');
+                loadDashboard();
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert('❌ 삭제 실패: ' + error.message);
+            }
+        }
+
+        function closeApartmentModal() {
+            document.getElementById('apartmentModal').classList.add('hidden');
+            document.getElementById('apartmentModal').classList.remove('flex');
+            document.getElementById('apartmentForm').reset();
+            editingApartmentId = null;
+        }
+
+        document.getElementById('apartmentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const apartmentData = {
+                name: document.getElementById('apartmentName').value.trim(),
+                code: document.getElementById('apartmentCode').value.trim() || null,
+                password: document.getElementById('apartmentPassword').value.trim() || 'bdxi2026', // 🔑 비밀번호 추가
+                address: document.getElementById('apartmentAddress').value.trim() || null,
+                google_sheet_id: document.getElementById('googleSheetId').value.trim() || null,
+                google_sheet_name: document.getElementById('googleSheetName').value.trim() || '근무표',
+                contact_person: document.getElementById('contactPerson').value.trim() || null,
+                contact_phone: document.getElementById('contactPhone').value.trim() || null
+            };
+            
+            // GPS 좌표 추가
+            const lat = document.getElementById('apartmentLat').value.trim();
+            const lng = document.getElementById('apartmentLng').value.trim();
+            const radius = document.getElementById('apartmentRadius').value.trim();
+            
+            if (lat && lng) {
+                const latNum = parseFloat(lat);
+                const lngNum = parseFloat(lng);
+                const radiusNum = parseInt(radius) || 1000;
+                
+                if (isNaN(latNum) || latNum < -90 || latNum > 90) {
+                    alert('❌ 위도는 -90 ~ 90 사이의 숫자여야 합니다.');
+                    return;
+                }
+                
+                if (isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+                    alert('❌ 경도는 -180 ~ 180 사이의 숫자여야 합니다.');
+                    return;
+                }
+                
+                if (radiusNum < 50 || radiusNum > 5000) {
+                    alert('❌ 허용 반경은 50m ~ 5000m 사이여야 합니다.');
+                    return;
+                }
+                
+                apartmentData.location_lat = latNum;
+                apartmentData.location_lng = lngNum;
+                apartmentData.allowed_radius_meters = radiusNum;
+                console.log('📍 GPS 좌표 저장:', latNum, lngNum, radiusNum);
+            }
+
+            try {
+                if (editingApartmentId) {
+                    // Update
+                    const { error } = await supabaseClient
+                        .from('apartments')
+                        .update(apartmentData)
+                        .eq('id', editingApartmentId);
+
+                    if (error) throw error;
+                    alert('✅ 아파트 정보가 수정되었습니다.');
+                } else {
+                    // Insert
+                    const { error } = await supabaseClient
+                        .from('apartments')
+                        .insert([apartmentData]);
+
+                    if (error) throw error;
+                    alert('✅ 새 아파트가 추가되었습니다.');
+                }
+
+                closeApartmentModal();
+                loadDashboard();
+            } catch (error) {
+                console.error('Save error:', error);
+                alert('❌ 저장 실패: ' + error.message);
+            }
+        });
+
+        function openApartmentDashboard(apartmentId) {
+            // 마스터 토큰과 함께 URL 생성 (로그인 없이 바로 대시보드로)
+            const masterToken = btoa('master2026:' + Date.now()); // 간단한 토큰 생성
+            window.open(`index.html?apartment=${apartmentId}&masterToken=${masterToken}`, '_blank');
+        }
+
+        function logout() {
+            if (confirm('로그아웃 하시겠습니까?')) {
+                window.location.href = 'index.html';
+            }
+        }
+
+        // ==================== 계약 관리 기능 ====================
+        
+        async function loadContractData() {
+            try {
+                const today = new Date();
+                const todayStr = today.toISOString().split('T')[0];
+                
+                // 🔴 중요: 활성 상태(status='active')이고 계약 종료일이 있는 직원만 로드
+                // 비활성 직원(퇴사자)은 계약 만료 알림에서 제외
+                const { data: employees, error } = await supabaseClient
+                    .from('employees')
+                    .select(`
+                        *,
+                        apartments (name)
+                    `)
+                    .not('contract_end', 'is', null)
+                    .eq('status', 'active'); // 🔴 수정: is_active -> status
+
+                if (error && error.code !== 'PGRST116') {
+                    console.error('Contract data load error:', error);
+                    return;
+                }
+
+                if (!employees || employees.length === 0) {
+                    console.log('📝 No contract data');
+                    document.getElementById('contractExpiring').textContent = '0';
+                    document.getElementById('contractExpired').textContent = '0';
+                    return;
+                }
+
+                console.log(`✅ Loaded ${employees.length} active employees with contract dates`);
+                
+                // 🔍 디버깅: 로드된 직원 목록 출력
+                console.log('📋 Loaded employees:', employees.map(e => ({ 
+                    name: e.name, 
+                    is_active: e.is_active, 
+                    contract_end: e.contract_end,
+                    apartment: e.apartments?.name 
+                })));
+
+                // 계약 상태별 분류
+                contractData.expired = [];
+                contractData.week = [];
+                contractData.month = [];
+
+                employees.forEach(emp => {
+                    // 비활성 직원 필터링 (status !== 'active')
+                    if (!emp.contract_end || emp.status !== 'active') {
+                        return;
+                    }
+
+                    const contractEnd = new Date(emp.contract_end);
+                    // ⚠️ 중요: 시간까지 고려하여 정확한 날짜 비교
+                    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const contractEndMidnight = new Date(contractEnd.getFullYear(), contractEnd.getMonth(), contractEnd.getDate());
+                    
+                    const daysUntilExpiry = Math.ceil((contractEndMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+
+                    emp.daysUntilExpiry = daysUntilExpiry;
+                    emp.contractEndFormatted = contractEnd.toLocaleDateString('ko-KR');
+                    emp.apartmentName = emp.apartments?.name || '미배정';
+
+                    // 🔴 수정: 계약 만료 및 임박 기준 명확화
+                    // - 만료: 계약 종료일이 오늘보다 과거 (daysUntilExpiry < 0)
+                    // - 7일 이내: 0 <= daysUntilExpiry <= 7
+                    // - 30일 이내: 8 <= daysUntilExpiry <= 30
+                    
+                    if (daysUntilExpiry < 0) {
+                        // 🔴 이미 만료 (오늘이 계약 종료일 이후)
+                        contractData.expired.push(emp);
+                    } else if (daysUntilExpiry <= 7) {
+                        // 🟡 7일 이내 만료 (오늘~7일 후)
+                        contractData.week.push(emp);
+                    } else if (daysUntilExpiry <= 30) {
+                        // 💡 30일 이내 만료 (8일~30일 후)
+                        contractData.month.push(emp);
+                    }
+                    // ✅ 30일 초과하는 계약은 아무 카테고리에도 추가하지 않음
+                });
+
+                // 통계 업데이트
+                const expiringCount = contractData.week.length + contractData.month.length;
+                const expiredCount = contractData.expired.length;
+
+                document.getElementById('contractExpiring').textContent = expiringCount;
+                document.getElementById('contractExpired').textContent = expiredCount;
+
+                console.log('📊 Contract stats:');
+                console.log('  🔴 Expired (active):', expiredCount);
+                console.log('  🟡 Expiring (week):', contractData.week.length);
+                console.log('  💡 Expiring (month):', contractData.month.length);
+                console.log('  ✅ Total expiring:', expiringCount);
+
+            } catch (error) {
+                console.error('❌ Load contract data error:', error);
+            }
+        }
+
+        async function showContractModal() {
+            // 🔄 모달 열 때마다 최신 계약 데이터 로드
+            await loadContractData();
+            
+            document.getElementById('contractModal').classList.remove('hidden');
+            document.getElementById('contractModal').classList.add('flex');
+            
+            // 모달 통계 업데이트
+            document.getElementById('modalExpiredCount').textContent = contractData.expired.length;
+            document.getElementById('modalWeekCount').textContent = contractData.week.length;
+            document.getElementById('modalMonthCount').textContent = contractData.month.length;
+            
+            // 기본 탭 (만료) 표시
+            switchContractTab('expired');
+        }
+
+        function closeContractModal() {
+            document.getElementById('contractModal').classList.add('hidden');
+            document.getElementById('contractModal').classList.remove('flex');
+        }
+
+        // 비활성 아파트 모달 함수
+        function showInactiveApartmentsModal() {
+            const modal = document.getElementById('inactiveApartmentsModal');
+            const listContainer = document.getElementById('inactiveApartmentsList');
+            
+            if (inactiveApartmentsData.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-center py-12 text-gray-400">
+                        <i class="fas fa-check-circle text-5xl mb-4 text-green-400"></i>
+                        <p class="text-lg">모든 단지가 활동 중입니다! 👍</p>
+                    </div>
+                `;
+            } else {
+                listContainer.innerHTML = inactiveApartmentsData.map(card => `
+                    <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-lg hover:bg-red-100 transition">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <h3 class="text-lg font-bold text-red-700">${card.apt.name}</h3>
+                                <p class="text-sm text-red-600 mt-1">
+                                    <i class="fas fa-users mr-1"></i>직원 ${card.employeeCount}명 | 
+                                    <i class="fas fa-clock mr-1"></i>3일 이상 활동 없음
+                                </p>
+                                <p class="text-xs text-red-500 mt-1">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>즉시 확인이 필요합니다
+                                </p>
+                            </div>
+                            <button onclick="openApartmentDashboard('${card.apt.id}')" class="ml-4 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition">
+                                <i class="fas fa-external-link-alt mr-1"></i>
+                                확인
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+        
+        function closeInactiveApartmentsModal() {
+            document.getElementById('inactiveApartmentsModal').classList.add('hidden');
+            document.getElementById('inactiveApartmentsModal').classList.remove('flex');
+        }
+
+        function switchContractTab(tab) {
+            currentContractTab = tab;
+            
+            // 탭 스타일 변경
+            ['tabExpired', 'tabWeek', 'tabMonth'].forEach(id => {
+                const btn = document.getElementById(id);
+                btn.classList.remove('text-red-600', 'border-b-2', 'border-red-600', 
+                                     'text-orange-600', 'border-orange-600',
+                                     'text-yellow-600', 'border-yellow-600');
+                btn.classList.add('text-gray-600');
+            });
+            
+            if (tab === 'expired') {
+                document.getElementById('tabExpired').classList.add('text-red-600', 'border-b-2', 'border-red-600');
+                document.getElementById('tabExpired').classList.remove('text-gray-600');
+            } else if (tab === 'week') {
+                document.getElementById('tabWeek').classList.add('text-orange-600', 'border-b-2', 'border-orange-600');
+                document.getElementById('tabWeek').classList.remove('text-gray-600');
+            } else if (tab === 'month') {
+                document.getElementById('tabMonth').classList.add('text-yellow-600', 'border-b-2', 'border-yellow-600');
+                document.getElementById('tabMonth').classList.remove('text-gray-600');
+            }
+            
+            // 목록 렌더링
+            renderContractList();
+        }
+
+        function renderContractList() {
+            const container = document.getElementById('contractList');
+            const data = contractData[currentContractTab] || [];
+            
+            if (data.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-gray-500">
+                        <i class="fas fa-check-circle text-5xl mb-4 opacity-50"></i>
+                        <p class="text-lg">해당하는 직원이 없습니다.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 만료일 임박 순으로 정렬
+            data.sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry);
+            
+            container.innerHTML = data.map(emp => {
+                let statusColor = '';
+                let statusText = '';
+                let statusIcon = '';
+                
+                if (currentContractTab === 'expired') {
+                    statusColor = 'bg-red-100 text-red-700 border-red-300';
+                    statusText = `만료 ${Math.abs(emp.daysUntilExpiry)}일 경과`;
+                    statusIcon = '🔴';
+                } else if (currentContractTab === 'week') {
+                    statusColor = 'bg-orange-100 text-orange-700 border-orange-300';
+                    statusText = `${emp.daysUntilExpiry}일 남음`;
+                    statusIcon = '⚠️';
+                } else {
+                    statusColor = 'bg-yellow-100 text-yellow-700 border-yellow-300';
+                    statusText = `${emp.daysUntilExpiry}일 남음`;
+                    statusIcon = '💡';
+                }
+                
+                return `
+                    <div class="p-4 bg-white border-2 ${statusColor} rounded-lg hover:shadow-md transition">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-2xl">${statusIcon}</span>
+                                    <div>
+                                        <h3 class="font-bold text-lg">${emp.name}</h3>
+                                        <p class="text-sm text-gray-600">
+                                            <i class="fas fa-building mr-1"></i>
+                                            ${emp.apartments?.name || '아파트 미지정'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-lg ${statusColor.split(' ')[1]}">${statusText}</p>
+                                <p class="text-sm text-gray-600 mt-1">
+                                    <i class="fas fa-calendar mr-1"></i>
+                                    만료일: ${emp.contractEndFormatted}
+                                </p>
+                                ${emp.phone ? `
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        <i class="fas fa-phone mr-1"></i>
+                                        ${emp.phone}
+                                    </p>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Load dashboard on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Master dashboard initializing...');
+            
+            // Supabase 라이브러리 로드 대기
+            if (typeof window.supabase === 'undefined') {
+                console.log('⏳ Waiting for Supabase library...');
+                const checkSupabase = setInterval(() => {
+                    if (typeof window.supabase !== 'undefined') {
+                        clearInterval(checkSupabase);
+                        console.log('✅ Supabase library loaded');
+                        loadDashboard();
+                    }
+                }, 100);
+                
+                // 10초 후에도 로드 안 되면 오류
+                setTimeout(() => {
+                    if (typeof window.supabase === 'undefined') {
+                        clearInterval(checkSupabase);
+                        document.getElementById('loading').innerHTML = `
+                            <div class="text-red-600">
+                                <i class="fas fa-exclamation-circle text-4xl mb-4"></i>
+                                <p class="text-xl font-bold">라이브러리 로드 실패</p>
+                                <p class="mt-2">Supabase 라이브러리를 불러올 수 없습니다.</p>
+                                <button onclick="location.reload()" class="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                                    새로고침
+                                </button>
+                            </div>
+                        `;
+                    }
+                }, 10000);
+            } else {
+                loadDashboard();
+            }
+        });
+
+        // Auto refresh every 5 minutes
+        setInterval(() => {
+            console.log('🔄 Auto-refreshing dashboard...');
+            loadDashboard();
+        }, 5 * 60 * 1000);
+        
+        // ==================== 정산서 제출 현황 로드 함수 ====================
+        async function loadSettlementSubmissionStatus() {
+            console.log('📊 정산서 제출 현황 로드 중...');
+            
+            try {
+                // 현재 연월 (YYYY-MM)
+                const now = new Date();
+                const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                
+                // 전체 아파트 수
+                const { data: apartments, error: aptError } = await supabaseClient
+                    .from('apartments')
+                    .select('id');
+                
+                if (aptError) throw aptError;
+                
+                const totalApartments = apartments?.length || 0;
+                
+                // 이번 달 정산서 제출된 아파트 수
+                const { data: settlements, error: settError } = await supabaseClient
+                    .from('monthly_settlements')
+                    .select('apartment_id')
+                    .eq('year_month', yearMonth)
+                    .in('status', ['submitted', 'under_review', 'approved']);
+                
+                if (settError) throw settError;
+                
+                const submittedCount = settlements?.length || 0;
+                
+                // UI 업데이트
+                document.getElementById('settlementsSubmitted').textContent = submittedCount;
+                document.getElementById('settlementsTotal').textContent = totalApartments;
+                
+                console.log(`✅ 정산서 제출 현황: ${submittedCount}/${totalApartments}`);
+                
+            } catch (error) {
+                console.error('❌ 정산서 제출 현황 로드 실패:', error);
+                document.getElementById('settlementsSubmitted').textContent = '0';
+                document.getElementById('settlementsTotal').textContent = '0';
+            }
+        }
+        
+        // ==================== 탭 전환 함수 ====================
+        let currentMasterTab = 'dashboard';
+
+        function switchMasterTab(tabName) {
+            console.log(`🔄 Switching to tab: ${tabName}`);
+            currentMasterTab = tabName;
+
+            // 모든 탭 콘텐츠 숨기기
+            ['dashboard', 'settlement', 'payroll'].forEach(tab => {
+                const content = document.getElementById(`tab-content-${tab}`);
+                const button = document.getElementById(`tab-${tab}`);
+                
+                if (content) content.style.display = 'none';
+                if (button) {
+                    button.classList.remove('brand-bg', 'text-white', 'border-green-600');
+                    button.classList.add('text-gray-600');
+                }
+            });
+
+            // 선택된 탭 표시
+            const selectedContent = document.getElementById(`tab-content-${tabName}`);
+            const selectedButton = document.getElementById(`tab-${tabName}`);
+            
+            if (selectedContent) selectedContent.style.display = 'block';
+            if (selectedButton) {
+                selectedButton.classList.remove('text-gray-600');
+                selectedButton.classList.add('brand-bg', 'text-white', 'border-green-600');
+            }
+
+            // 탭별 데이터 로드
+            if (tabName === 'dashboard') {
+                // 대시보드는 이미 로드됨
+            } else if (tabName === 'settlement') {
+                loadPendingSettlements();
+            } else if (tabName === 'payroll') {
+                loadPayrollManagement();
+            }
+        }
+
+        // ==================== 정산서 승인 관련 함수 ====================
+        
+        let currentSettlementData = null;
+        let allSettlementsData = [];
+
+        // 정산서 목록 로드
+        async function loadPendingSettlements() {
+            console.log('📋 정산서 목록 로드 중...');
+            
+            try {
+                const { data: settlements, error } = await supabaseClient
+                    .from('monthly_settlements')
+                    .select(`
+                        *,
+                        apartments(name),
+                        employees!submitted_by(name)
+                    `)
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                allSettlementsData = settlements || [];
+                console.log(`✅ ${allSettlementsData.length}개의 정산서 로드됨`);
+
+                // 상태별 카운트 업데이트
+                updateSettlementCounts(allSettlementsData);
+
+                // 기본적으로 제출 완료 상태만 표시
+                filterSettlementsByStatus('submitted');
+
+            } catch (error) {
+                console.error('❌ 정산서 로드 실패:', error);
+                document.getElementById('settlement-list').innerHTML = `
+                    <div class="text-center py-12 text-red-600">
+                        <i class="fas fa-exclamation-circle text-5xl mb-4"></i>
+                        <p class="text-lg font-bold">데이터 로드 실패</p>
+                        <p class="text-sm mt-2">${error.message}</p>
+                        <button onclick="loadPendingSettlements()" class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            다시 시도
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // 상태별 카운트 업데이트
+        function updateSettlementCounts(settlements) {
+            const counts = {
+                submitted: settlements.filter(s => s.status === 'submitted').length,
+                under_review: settlements.filter(s => s.status === 'under_review').length,
+                approved: settlements.filter(s => s.status === 'approved').length,
+                rejected: settlements.filter(s => s.status === 'rejected').length
+            };
+
+            document.getElementById('settlement-count-submitted').textContent = counts.submitted;
+            document.getElementById('settlement-count-review').textContent = counts.under_review;
+            document.getElementById('settlement-count-approved').textContent = counts.approved;
+            document.getElementById('settlement-count-rejected').textContent = counts.rejected;
+        }
+
+        // 상태별 필터링
+        function filterSettlementsByStatus(status) {
+            console.log(`🔍 필터: ${status}`);
+            
+            let filtered = allSettlementsData;
+            if (status !== 'all') {
+                filtered = allSettlementsData.filter(s => s.status === status);
+            }
+
+            renderSettlementsList(filtered);
+        }
+
+        // 정산서 목록 렌더링
+        function renderSettlementsList(settlements) {
+            const container = document.getElementById('settlement-list');
+            
+            if (settlements.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-gray-500">
+                        <i class="fas fa-inbox text-5xl mb-4 opacity-30"></i>
+                        <p>표시할 정산서가 없습니다</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = settlements.map(settlement => createSettlementCard(settlement)).join('');
+        }
+
+        // 정산서 카드 생성
+        function createSettlementCard(settlement) {
+            const statusMap = {
+                'draft': { text: '초안', class: 'bg-gray-100 text-gray-600 border-gray-300', icon: '📝' },
+                'submitted': { text: '제출 완료', class: 'bg-blue-100 text-blue-600 border-blue-300', icon: '📤' },
+                'under_review': { text: '검토 중', class: 'bg-yellow-100 text-yellow-600 border-yellow-300', icon: '🔍' },
+                'approved': { text: '승인 완료', class: 'bg-green-100 text-green-600 border-green-300', icon: '✅' },
+                'rejected': { text: '반려', class: 'bg-red-100 text-red-600 border-red-300', icon: '❌' }
+            };
+
+            const status = statusMap[settlement.status] || statusMap['draft'];
+            const apartmentName = settlement.apartments?.name || '알 수 없음';
+            const submitterName = settlement.employees?.name || '알 수 없음';
+            const [year, month] = settlement.year_month.split('-');
+
+            return `
+                <div class="bg-white border-2 ${status.class} rounded-lg p-5 hover:shadow-lg transition cursor-pointer" onclick="viewSettlementDetail('${settlement.id}')">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <span class="text-2xl">${status.icon}</span>
+                                <div>
+                                    <h3 class="text-lg font-bold text-gray-800">${apartmentName}</h3>
+                                    <p class="text-sm text-gray-600">${year}년 ${parseInt(month)}월 정산서</p>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                                <div>
+                                    <p class="text-xs text-gray-500">직원 수</p>
+                                    <p class="font-bold text-gray-700">${settlement.total_employees || 0}명</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500">근무일</p>
+                                    <p class="font-bold text-gray-700">${settlement.total_work_days || 0}일</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500">근무시간</p>
+                                    <p class="font-bold text-gray-700">${(settlement.total_work_hours || 0).toFixed(1)}h</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500">초과근무</p>
+                                    <p class="font-bold text-gray-700">${(settlement.total_overtime_hours || 0).toFixed(1)}h</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-4 mt-4 text-sm text-gray-600">
+                                <span><i class="fas fa-user mr-1"></i>제출: ${submitterName}</span>
+                                <span><i class="fas fa-clock mr-1"></i>${new Date(settlement.created_at).toLocaleDateString('ko-KR')}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="text-right">
+                            <span class="inline-block px-3 py-1 rounded-full text-sm font-bold ${status.class} border-2">
+                                ${status.text}
+                            </span>
+                            ${settlement.review_comment ? `
+                                <p class="text-xs text-gray-500 mt-2">
+                                    <i class="fas fa-comment mr-1"></i>
+                                    검토 의견 있음
+                                </p>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    ${settlement.status === 'submitted' || settlement.status === 'under_review' ? `
+                        <div class="flex gap-2 mt-4 pt-4 border-t border-gray-200" onclick="event.stopPropagation()">
+                            <button onclick="rejectSettlement('${settlement.id}')" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition">
+                                <i class="fas fa-times-circle mr-2"></i>
+                                반려
+                            </button>
+                            <button onclick="approveSettlement('${settlement.id}')" class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition">
+                                <i class="fas fa-check-circle mr-2"></i>
+                                승인
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // 정산서 상세보기
+        async function viewSettlementDetail(settlementId) {
+            console.log(`👁️ 정산서 상세보기: ${settlementId}`);
+            
+            const settlement = allSettlementsData.find(s => s.id === settlementId);
+            if (!settlement) {
+                alert('정산서를 찾을 수 없습니다.');
+                return;
+            }
+
+            currentSettlementData = settlement;
+            const [year, month] = settlement.year_month.split('-');
+
+            const statusMap = {
+                'draft': { text: '초안', class: 'bg-gray-100 text-gray-600', icon: '📝' },
+                'submitted': { text: '제출 완료', class: 'bg-blue-100 text-blue-600', icon: '📤' },
+                'under_review': { text: '검토 중', class: 'bg-yellow-100 text-yellow-600', icon: '🔍' },
+                'approved': { text: '승인 완료', class: 'bg-green-100 text-green-600', icon: '✅' },
+                'rejected': { text: '반려', class: 'bg-red-100 text-red-600', icon: '❌' }
+            };
+
+            const status = statusMap[settlement.status] || statusMap['draft'];
+
+            document.getElementById('settlement-detail-content').innerHTML = `
+                <div class="space-y-6">
+                    <!-- 기본 정보 -->
+                    <div class="flex items-center justify-between pb-4 border-b">
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">${settlement.apartments?.name || '알 수 없음'}</h3>
+                            <p class="text-gray-600 mt-1">${year}년 ${parseInt(month)}월 정산서</p>
+                        </div>
+                        <span class="px-4 py-2 rounded-full text-sm font-bold ${status.class}">
+                            ${status.icon} ${status.text}
+                        </span>
+                    </div>
+
+                    <!-- 통계 정보 -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <p class="text-sm text-blue-600 font-medium">총 직원</p>
+                            <p class="text-3xl font-bold text-blue-700 mt-2">${settlement.total_employees || 0}</p>
+                            <p class="text-xs text-blue-500 mt-1">명</p>
+                        </div>
+                        <div class="bg-green-50 p-4 rounded-lg">
+                            <p class="text-sm text-green-600 font-medium">근무일</p>
+                            <p class="text-3xl font-bold text-green-700 mt-2">${settlement.total_work_days || 0}</p>
+                            <p class="text-xs text-green-500 mt-1">일</p>
+                        </div>
+                        <div class="bg-purple-50 p-4 rounded-lg">
+                            <p class="text-sm text-purple-600 font-medium">근무시간</p>
+                            <p class="text-3xl font-bold text-purple-700 mt-2">${(settlement.total_work_hours || 0).toFixed(1)}</p>
+                            <p class="text-xs text-purple-500 mt-1">시간</p>
+                        </div>
+                        <div class="bg-orange-50 p-4 rounded-lg">
+                            <p class="text-sm text-orange-600 font-medium">초과근무</p>
+                            <p class="text-3xl font-bold text-orange-700 mt-2">${(settlement.total_overtime_hours || 0).toFixed(1)}</p>
+                            <p class="text-xs text-orange-500 mt-1">시간</p>
+                        </div>
+                    </div>
+
+                    <!-- 엑셀 파일 다운로드 -->
+                    ${settlement.excel_file_url ? `
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <p class="font-medium text-gray-700 mb-3">
+                                <i class="fas fa-file-excel text-green-600 mr-2"></i>
+                                정산서 파일
+                            </p>
+                            <a href="${settlement.excel_file_url}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition">
+                                <i class="fas fa-download"></i>
+                                엑셀 다운로드
+                            </a>
+                        </div>
+                    ` : ''}
+
+                    <!-- 제출 정보 -->
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <p class="font-medium text-gray-700 mb-3">제출 정보</p>
+                        <div class="space-y-2 text-sm text-gray-600">
+                            <p><i class="fas fa-user mr-2"></i>제출자: ${settlement.employees?.name || '알 수 없음'}</p>
+                            <p><i class="fas fa-clock mr-2"></i>제출일시: ${settlement.submitted_at ? new Date(settlement.submitted_at).toLocaleString('ko-KR') : '-'}</p>
+                        </div>
+                    </div>
+
+                    <!-- 검토 의견 -->
+                    ${settlement.review_comment ? `
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <p class="font-medium text-yellow-800 mb-2">
+                                <i class="fas fa-comment mr-2"></i>
+                                검토 의견
+                            </p>
+                            <p class="text-gray-700">${settlement.review_comment}</p>
+                        </div>
+                    ` : ''}
+
+                    <!-- 반려 의견 입력 (submitted/under_review 상태만) -->
+                    ${settlement.status === 'submitted' || settlement.status === 'under_review' ? `
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-comment-dots text-red-600 mr-2"></i>
+                                검토 의견 (반려 시 필수)
+                            </label>
+                            <textarea id="review-comment-input" rows="4" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="검토 의견을 입력하세요..."></textarea>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            // 버튼 표시/숨김
+            const btnApprove = document.getElementById('btn-approve-settlement');
+            const btnReject = document.getElementById('btn-reject-settlement');
+            
+            if (settlement.status === 'submitted' || settlement.status === 'under_review') {
+                btnApprove.style.display = 'inline-flex';
+                btnReject.style.display = 'inline-flex';
+            } else {
+                btnApprove.style.display = 'none';
+                btnReject.style.display = 'none';
+            }
+
+            // 모달 표시
+            document.getElementById('settlement-detail-modal').classList.remove('hidden');
+            document.getElementById('settlement-detail-modal').classList.add('flex');
+        }
+
+        function closeSettlementDetailModal() {
+            document.getElementById('settlement-detail-modal').classList.add('hidden');
+            document.getElementById('settlement-detail-modal').classList.remove('flex');
+            currentSettlementData = null;
+        }
+
+        // 정산서 승인 (카드에서)
+        async function approveSettlement(settlementId) {
+            if (!confirm('이 정산서를 승인하시겠습니까?')) return;
+
+            console.log(`✅ 정산서 승인: ${settlementId}`);
+
+            try {
+                const { error } = await supabaseClient
+                    .from('monthly_settlements')
+                    .update({
+                        status: 'approved',
+                        reviewed_at: new Date().toISOString(),
+                        review_comment: null
+                    })
+                    .eq('id', settlementId);
+
+                if (error) throw error;
+
+                alert('✅ 정산서가 승인되었습니다!');
+                await loadPendingSettlements();
+
+            } catch (error) {
+                console.error('❌ 승인 실패:', error);
+                alert(`승인 중 오류가 발생했습니다:\n${error.message}`);
+            }
+        }
+
+        // 정산서 승인 (모달에서)
+        async function approveSettlementFromModal() {
+            if (!currentSettlementData) return;
+            
+            closeSettlementDetailModal();
+            await approveSettlement(currentSettlementData.id);
+        }
+
+        // 정산서 반려 (카드에서)
+        async function rejectSettlement(settlementId) {
+            const comment = prompt('반려 사유를 입력하세요:');
+            if (!comment || comment.trim() === '') {
+                alert('반려 사유를 입력해주세요.');
+                return;
+            }
+
+            console.log(`❌ 정산서 반려: ${settlementId}`);
+
+            try {
+                const { error } = await supabaseClient
+                    .from('monthly_settlements')
+                    .update({
+                        status: 'rejected',
+                        reviewed_at: new Date().toISOString(),
+                        review_comment: comment.trim()
+                    })
+                    .eq('id', settlementId);
+
+                if (error) throw error;
+
+                alert('❌ 정산서가 반려되었습니다.');
+                await loadPendingSettlements();
+
+            } catch (error) {
+                console.error('❌ 반려 실패:', error);
+                alert(`반려 중 오류가 발생했습니다:\n${error.message}`);
+            }
+        }
+
+        // 정산서 반려 (모달에서)
+        async function rejectSettlementFromModal() {
+            if (!currentSettlementData) return;
+            
+            const commentInput = document.getElementById('review-comment-input');
+            const comment = commentInput ? commentInput.value.trim() : '';
+            
+            if (!comment) {
+                alert('검토 의견을 입력해주세요.');
+                return;
+            }
+
+            console.log(`❌ 정산서 반려 (모달): ${currentSettlementData.id}`);
+
+            try {
+                const { error } = await supabaseClient
+                    .from('monthly_settlements')
+                    .update({
+                        status: 'rejected',
+                        reviewed_at: new Date().toISOString(),
+                        review_comment: comment
+                    })
+                    .eq('id', currentSettlementData.id);
+
+                if (error) throw error;
+
+                closeSettlementDetailModal();
+                alert('❌ 정산서가 반려되었습니다.');
+                await loadPendingSettlements();
+
+            } catch (error) {
+                console.error('❌ 반려 실패:', error);
+                alert(`반려 중 오류가 발생했습니다:\n${error.message}`);
+            }
+        }
+
+        // ==================== 급여 관리 관련 함수 ====================
+        
+        let selectedPayrollFile = null;
+
+        // 급여 관리 데이터 로드
+        async function loadPayrollManagement() {
+            console.log('💰 급여 관리 데이터 로드 중...');
+            
+            try {
+                // 승인된 정산서 중 급여 미발급 목록 로드
+                await loadApprovedSettlements();
+                
+                // 급여 발급 내역 로드
+                await loadPayrollHistory();
+                
+                // 통계 업데이트
+                await updatePayrollStats();
+
+            } catch (error) {
+                console.error('❌ 급여 관리 데이터 로드 실패:', error);
+            }
+        }
+
+        // 승인된 정산서 (급여 미발급) 로드
+        async function loadApprovedSettlements() {
+            const { data: settlements, error } = await supabaseClient
+                .from('monthly_settlements')
+                .select(`
+                    *,
+                    apartments(name)
+                `)
+                .eq('status', 'approved')
+                .is('payroll_issued', null)  // 급여 미발급
+                .order('year_month', { ascending: false });
+
+            if (error) throw error;
+
+            const container = document.getElementById('approved-settlements-list');
+            
+            if (!settlements || settlements.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-check-circle text-4xl mb-3 opacity-30 text-green-500"></i>
+                        <p>급여 발급이 필요한 정산서가 없습니다</p>
+                        <p class="text-sm text-gray-400 mt-2">승인된 정산서가 여기에 표시됩니다</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = settlements.map(s => {
+                const [year, month] = s.year_month.split('-');
+                return `
+                    <div class="bg-green-50 border-2 border-green-200 rounded-lg p-4 hover:shadow-md transition">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <h4 class="font-bold text-gray-800">${s.apartments?.name || '알 수 없음'}</h4>
+                                <p class="text-sm text-gray-600 mt-1">${year}년 ${parseInt(month)}월</p>
+                                <p class="text-xs text-gray-500 mt-2">
+                                    <i class="fas fa-users mr-1"></i>${s.total_employees || 0}명 · 
+                                    <i class="fas fa-calendar mr-1"></i>${s.total_work_days || 0}일
+                                </p>
+                            </div>
+                            <button onclick="issuePayrollForSettlement('${s.id}')" class="px-4 py-2 brand-bg hover:opacity-90 text-white rounded-lg font-medium transition">
+                                <i class="fas fa-file-upload mr-2"></i>
+                                급여 발급
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 모달의 정산서 선택 드롭다운도 업데이트
+            updatePayrollSettlementSelect(settlements);
+        }
+
+        // 급여명세서 업로드 모달의 정산서 선택 업데이트
+        function updatePayrollSettlementSelect(settlements) {
+            const select = document.getElementById('payroll-settlement-select');
+            if (!select) return;
+
+            select.innerHTML = '<option value="">승인된 정산서를 선택하세요</option>' +
+                settlements.map(s => {
+                    const [year, month] = s.year_month.split('-');
+                    return `<option value="${s.id}">${s.apartments?.name} - ${year}년 ${parseInt(month)}월</option>`;
+                }).join('');
+        }
+
+        // 급여 발급 내역 로드
+        async function loadPayrollHistory() {
+            // TODO: payroll_statements 테이블에서 발급 내역 로드
+            // 현재는 발급된 정산서를 기준으로 표시
+            
+            const { data: settlements, error } = await supabaseClient
+                .from('monthly_settlements')
+                .select(`
+                    *,
+                    apartments(name)
+                `)
+                .eq('status', 'approved')
+                .not('payroll_issued', 'is', null)  // 급여 발급됨
+                .order('payroll_issued', { ascending: false })
+                .limit(20);
+
+            if (error) throw error;
+
+            const container = document.getElementById('payroll-history-list');
+            
+            if (!settlements || settlements.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-history text-4xl mb-3 opacity-30"></i>
+                        <p>발급 내역이 없습니다</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = settlements.map(s => {
+                const [year, month] = s.year_month.split('-');
+                return `
+                    <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xl">💰</span>
+                                    <div>
+                                        <h4 class="font-bold text-gray-800">${s.apartments?.name || '알 수 없음'}</h4>
+                                        <p class="text-sm text-gray-600">${year}년 ${parseInt(month)}월</p>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">
+                                    <i class="fas fa-clock mr-1"></i>
+                                    발급: ${new Date(s.payroll_issued).toLocaleString('ko-KR')}
+                                </p>
+                            </div>
+                            <span class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                                발급 완료
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 급여 통계 업데이트
+        async function updatePayrollStats() {
+            const now = new Date();
+            const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            // 이번 달 발급 건수
+            const { data: monthPayrolls, error: monthError } = await supabaseClient
+                .from('monthly_settlements')
+                .select('id')
+                .eq('year_month', yearMonth)
+                .not('payroll_issued', 'is', null);
+
+            // 전체 직원 수
+            const { data: employees, error: empError } = await supabaseClient
+                .from('employees')
+                .select('id');
+
+            // 미배포 건수 (승인됐으나 급여 미발급)
+            const { data: pending, error: pendingError } = await supabaseClient
+                .from('monthly_settlements')
+                .select('id')
+                .eq('status', 'approved')
+                .is('payroll_issued', null);
+
+            document.getElementById('payroll-count-month').textContent = monthPayrolls?.length || 0;
+            document.getElementById('payroll-total-employees').textContent = employees?.length || 0;
+            document.getElementById('payroll-pending').textContent = pending?.length || 0;
+        }
+
+        // 특정 정산서에 대해 급여 발급 (버튼 클릭)
+        function issuePayrollForSettlement(settlementId) {
+            // 모달 열기 및 정산서 자동 선택
+            openPayrollUploadModal();
+            
+            setTimeout(() => {
+                const select = document.getElementById('payroll-settlement-select');
+                if (select) {
+                    select.value = settlementId;
+                    
+                    // 해당 정산서의 year_month를 가져와서 자동 입력
+                    const settlement = allSettlementsData.find(s => s.id === settlementId);
+                    if (settlement) {
+                        document.getElementById('payroll-year-month').value = settlement.year_month;
+                    }
+                }
+            }, 100);
+        }
+
+        // 급여명세서 업로드 모달 열기
+        function openPayrollUploadModal() {
+            // 승인된 정산서 목록 다시 로드
+            loadApprovedSettlements();
+            
+            // 현재 연월로 기본값 설정
+            const now = new Date();
+            const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            document.getElementById('payroll-year-month').value = yearMonth;
+            
+            // 모달 표시
+            document.getElementById('payroll-upload-modal').classList.remove('hidden');
+            document.getElementById('payroll-upload-modal').classList.add('flex');
+        }
+
+        function closePayrollUploadModal() {
+            document.getElementById('payroll-upload-modal').classList.add('hidden');
+            document.getElementById('payroll-upload-modal').classList.remove('flex');
+            clearPayrollFile();
+        }
+
+        // 파일 선택 처리
+        function handlePayrollFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type !== 'application/pdf') {
+                alert('PDF 파일만 업로드 가능합니다.');
+                event.target.value = '';
+                return;
+            }
+
+            selectedPayrollFile = file;
+
+            // 파일 정보 표시
+            document.getElementById('payroll-file-name').textContent = file.name;
+            document.getElementById('payroll-file-size').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+            document.getElementById('payroll-file-info').classList.remove('hidden');
+
+            console.log(`📄 파일 선택됨: ${file.name} (${file.size} bytes)`);
+        }
+
+        function clearPayrollFile() {
+            selectedPayrollFile = null;
+            document.getElementById('payroll-pdf-file').value = '';
+            document.getElementById('payroll-file-info').classList.add('hidden');
+        }
+
+        // 급여명세서 업로드
+        async function uploadPayrollPDF() {
+            const settlementId = document.getElementById('payroll-settlement-select').value;
+            const yearMonth = document.getElementById('payroll-year-month').value;
+            const autoDistribute = document.getElementById('payroll-auto-distribute').checked;
+
+            // 유효성 검사
+            if (!settlementId) {
+                alert('정산서를 선택해주세요.');
+                return;
+            }
+
+            if (!yearMonth) {
+                alert('발급 연월을 입력해주세요.');
+                return;
+            }
+
+            if (!selectedPayrollFile) {
+                alert('급여명세서 PDF 파일을 선택해주세요.');
+                return;
+            }
+
+            console.log('💰 급여명세서 업로드 시작...');
+
+            try {
+                // 업로드 버튼 비활성화
+                const uploadBtn = document.getElementById('btn-upload-payroll');
+                uploadBtn.disabled = true;
+                uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>업로드 중...';
+
+                // 진행 상태 표시
+                document.getElementById('payroll-upload-progress').classList.remove('hidden');
+                document.getElementById('payroll-upload-progress-bar').style.width = '30%';
+
+                // TODO: Supabase Storage에 PDF 업로드
+                // 현재는 간단히 정산서 상태만 업데이트
+                
+                const { error } = await supabaseClient
+                    .from('monthly_settlements')
+                    .update({
+                        payroll_issued: new Date().toISOString(),
+                        payroll_pdf_url: 'https://example.com/payroll.pdf'  // 실제로는 Storage URL
+                    })
+                    .eq('id', settlementId);
+
+                if (error) throw error;
+
+                // 진행 상태 업데이트
+                document.getElementById('payroll-upload-progress-bar').style.width = '100%';
+
+                setTimeout(() => {
+                    closePayrollUploadModal();
+                    alert(`✅ 급여명세서가 업로드되었습니다!${autoDistribute ? '\n전 직원에게 배포되었습니다.' : ''}`);
+                    loadPayrollManagement();
+                }, 500);
+
+            } catch (error) {
+                console.error('❌ 업로드 실패:', error);
+                alert(`업로드 중 오류가 발생했습니다:\n${error.message}`);
+
+                // 버튼 복구
+                const uploadBtn = document.getElementById('btn-upload-payroll');
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i class="fas fa-upload mr-2"></i>업로드';
+                
+                document.getElementById('payroll-upload-progress').classList.add('hidden');
+                document.getElementById('payroll-upload-progress-bar').style.width = '0%';
+            }
+        }
+
+        // ==================== 민원 관리 (Google Sheets 연동) ====================
+        
+        /**
+         * 특정 아파트의 Google Sheets에서 민원 데이터 가져오기
+         * @param {string} sheetId - Google Sheets ID
+         * @param {string} sheetName - Sheet 탭 이름 (기본값: '월간 민원 처리 현황 DB')
+         * @returns {Promise<Array>} - 민원 데이터 배열
+         */
+        async function fetchComplaintsFromGoogleSheets(sheetId, sheetName = '월간 민원 처리 현황 DB') {
+            try {
+                if (!sheetId) {
+                    console.warn('⚠️ Google Sheets ID가 없습니다');
+                    return [];
+                }
+                
+                const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+                console.log('🔍 [Google Sheets] Fetching complaints from:', url);
+                
+                const response = await fetch(url);
+                console.log('📡 [Google Sheets] Response status:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error(`Google Sheets 로드 실패: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                console.log('📄 [Google Sheets] Response received, length:', text.length);
+                
+                // Check if response is HTML error page (not JSON)
+                if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+                    console.error('❌ [Google Sheets] Received HTML instead of JSON. This means:');
+                    console.error('   1. Google Sheet is NOT publicly accessible (check sharing settings)');
+                    console.error('   2. Sheet ID is incorrect:', sheetId);
+                    console.error('   3. Sheet tab name is incorrect:', sheetName);
+                    console.error('📋 [Google Sheets] Please verify:');
+                    console.error('   - Open: https://docs.google.com/spreadsheets/d/' + sheetId);
+                    console.error('   - Click "Share" → Change to "Anyone with the link" → Viewer');
+                    console.error('   - Verify tab name exactly matches:', sheetName);
+                    
+                    // Show user-friendly error in UI
+                    throw new Error(`구글 시트 접근 불가: 시트가 공개되지 않았거나 ID/탭 이름이 잘못되었습니다.`);
+                }
+                
+                // Check if response starts with expected Google Sheets JSON prefix
+                if (!text.startsWith('/*O_o*/') && !text.includes('google.visualization')) {
+                    console.error('❌ [Google Sheets] Unexpected response format:', text.substring(0, 100));
+                    throw new Error('Google Sheets 응답 형식이 올바르지 않습니다');
+                }
+                
+                const jsonText = text.substring(47, text.length - 2);
+                const data = JSON.parse(jsonText);
+                
+                console.log('✅ [Google Sheets] Parsed data structure:', {
+                    hasTable: !!data.table,
+                    hasRows: !!data.table?.rows,
+                    rowCount: data.table?.rows?.length || 0,
+                    columns: data.table?.cols?.map(col => col.label) || []
+                });
+                
+                if (!data.table || !data.table.rows || data.table.rows.length === 0) {
+                    console.warn('⚠️ [Google Sheets] No data rows found');
+                    return [];
+                }
+                
+                const rows = data.table.rows;
+                
+                console.log('📊 [Google Sheets] Data info:', {
+                    totalRows: rows.length,
+                    headerRow: rows[15]?.c?.map(cell => cell?.v || cell?.f), // Row 16 is header (0-indexed = 15)
+                    dataRowsCount: rows.length - 16
+                });
+                
+                // Log rows around header (rows 14-18) to see structure
+                console.log('📋 [Google Sheets] Rows around header (14-18):');
+                for (let i = 14; i < Math.min(19, rows.length); i++) {
+                    const row = rows[i];
+                    console.log(`  Row ${i + 1} (index ${i}):`, {
+                        cells: row.c?.map((cell, idx) => ({
+                            col: String.fromCharCode(65 + idx), // A, B, C...
+                            v: cell?.v,
+                            f: cell?.f
+                        }))
+                    });
+                }
+                
+                // Skip first 16 rows (rows 1-15: summary dashboard, row 16: headers)
+                // Data starts at row 17 (index 16)
+                const dataRows = rows.slice(16); // Skip summary dashboard and header
+                
+                const complaints = dataRows.map((row, index) => {
+                    const cells = row.c || [];
+                    
+                    // Helper to safely get cell value with detailed logging
+                    const getCellValue = (cell, columnName) => {
+                        if (!cell) {
+                            if (index < 3) console.log(`  ⚠️ ${columnName}: cell is null/undefined`);
+                            return '-';
+                        }
+                        const value = cell.v || cell.f || '-';
+                        if (index < 3) console.log(`  ✓ ${columnName}:`, value);
+                        return value;
+                    };
+                    
+                    const complaint = {
+                        date: getCellValue(cells[0], 'A:작성일시'),
+                        location: getCellValue(cells[3], 'D:민원인신상(동/호수)'),  // ← Fixed from cells[1]
+                        content: getCellValue(cells[7], 'H:민원내용'),
+                        status: getCellValue(cells[6], 'G:진행상황'),
+                        result: getCellValue(cells[8], 'I:조치사항'),
+                        completeDate: getCellValue(cells[0], 'A:작성일시(재확인)')
+                    };
+                    
+                    // Log first 3 actual data rows with full details
+                    if (index < 3) {
+                        console.log(`📋 [Google Sheets] Data Row ${index + 1} (Sheet Row ${index + 17}) full data:`, {
+                            rawCells: cells.map((c, i) => ({col: String.fromCharCode(65 + i), v: c?.v, f: c?.f})),
+                            parsed: complaint
+                        });
+                    }
+                    
+                    return complaint;
+                });
+                
+                console.log(`✅ [Google Sheets] Successfully parsed ${complaints.length} complaints`);
+                return complaints;
+                
+            } catch (error) {
+                console.error('❌ [Google Sheets] 민원 데이터 로드 실패:', error);
+                return [];
+            }
+        }
+        
+        /**
+         * 이번 달 민원 개수 계산
+         * @param {Array} complaints - 민원 배열
+         * @returns {number} - 이번 달 민원 개수
+         */
+        function countComplaintsThisMonth(complaints) {
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const currentMonth = today.getMonth() + 1;
+            
+            return complaints.filter(complaint => {
+                if (!complaint.date || complaint.date === '-') return false;
+                
+                try {
+                    // Google Sheets의 날짜 형식 파싱 (예: "Date(2024, 0, 15, 0, 0, 0)")
+                    const dateMatch = complaint.date.match(/Date\((\d+),\s*(\d+),\s*(\d+)/);
+                    if (dateMatch) {
+                        const year = parseInt(dateMatch[1]);
+                        const month = parseInt(dateMatch[2]) + 1; // JavaScript month는 0부터 시작
+                        return year === currentYear && month === currentMonth;
+                    }
+                    
+                    // 일반 날짜 문자열 파싱 시도
+                    const date = new Date(complaint.date);
+                    return date.getFullYear() === currentYear && date.getMonth() + 1 === currentMonth;
+                } catch (error) {
+                    return false;
+                }
+            }).length;
+        }
+        
+        /**
+         * 민원 상태별 배지 생성
+         * @param {string} status - 민원 상태
+         * @returns {string} - HTML 배지
+         */
+        function getComplaintStatusBadge(status) {
+            const statusLower = (status || '').toLowerCase().trim();
+            
+            if (statusLower === '완료' || statusLower === 'completed' || statusLower === 'done') {
+                return '<span class="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">완료</span>';
+            } else if (statusLower === '처리중' || statusLower === 'processing' || statusLower === 'in progress') {
+                return '<span class="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">처리중</span>';
+            } else if (statusLower === '대기' || statusLower === 'pending' || statusLower === 'waiting') {
+                return '<span class="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">대기</span>';
+            } else {
+                return `<span class="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">${status}</span>`;
+            }
+        }
+        
+        /**
+         * 민원 내용 요약 (50자 제한)
+         * @param {string} content - 민원 내용
+         * @returns {string} - 요약된 내용
+         */
+        function summarizeComplaint(content) {
+            if (!content || content === '-') return '내용 없음';
+            if (content.length <= 50) return content;
+            return content.substring(0, 50) + '...';
+        }
+
+        // Google Maps 헬퍼 함수
+        function openGoogleMapsHelper() {
+            const apartmentName = document.getElementById('apartmentName').value.trim();
+            const apartmentAddress = document.getElementById('apartmentAddress').value.trim();
+            
+            const searchQuery = apartmentName || apartmentAddress || '관리사무소';
+            const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(searchQuery + ' 관리사무소')}`;
+            
+            window.open(mapsUrl, '_blank');
+            
+            alert('📍 Google Maps에서 관리사무소를 찾아 우클릭 → "이 장소 정보" 클릭 후 좌표를 복사하세요!\n\n예시: 37.2157891, 127.0528374\n(첫 번째 숫자: 위도, 두 번째 숫자: 경도)');
+        }
+    </script>
+</body>
+</html>

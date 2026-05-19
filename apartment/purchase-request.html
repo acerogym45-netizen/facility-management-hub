@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>구매 요청 - KINDWON</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+
+    <!-- CDNs -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+      body {
+        font-family: 'Noto Sans KR', sans-serif;
+      }
+      .bg-gradient-brand {
+        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+      }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gradient-brand text-white p-6 shadow-lg">
+      <div class="max-w-2xl mx-auto">
+        <h1 class="text-2xl font-bold">
+          <i class="fas fa-shopping-cart mr-2"></i>구매 요청
+        </h1>
+        <p class="text-sm text-gray-300 mt-1">필요한 물품을 요청하세요</p>
+      </div>
+    </header>
+
+    <!-- Loading Screen -->
+    <div id="loading" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+      <div class="loader"></div>
+      <p class="text-gray-600 mt-4">로딩 중...</p>
+    </div>
+
+    <!-- Main Content -->
+    <main id="main-content" class="hidden max-w-2xl mx-auto p-4 py-6">
+      <!-- Location Info -->
+      <div class="bg-white rounded-xl shadow-sm border p-4 mb-4">
+        <div class="flex items-center text-gray-700">
+          <i class="fas fa-map-marker-alt text-blue-600 mr-2"></i>
+          <span class="font-medium" id="location-name">-</span>
+        </div>
+      </div>
+
+      <!-- Form -->
+      <div class="bg-white rounded-xl shadow-sm border p-6">
+        <!-- 요청자 이름 -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">요청자 이름 *</label>
+          <input type="text" id="requester-name" placeholder="이름을 입력하세요" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <!-- 구매 사유 -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">구매 사유 *</label>
+          <textarea id="purchase-reason" rows="3" placeholder="구매가 필요한 이유를 입력하세요..." class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+
+        <!-- 물품 목록 -->
+        <div class="mb-4">
+          <div class="flex justify-between items-center mb-3">
+            <label class="block text-sm font-medium text-gray-700">물품 목록 *</label>
+            <button onclick="addItem()" class="px-3 py-1 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors">
+              <i class="fas fa-plus mr-1"></i>물품 추가
+            </button>
+          </div>
+          
+          <div id="items-container" class="space-y-3">
+            <!-- 물품 항목들이 여기에 추가됩니다 -->
+          </div>
+        </div>
+
+        <!-- 총 금액 -->
+        <div class="bg-gray-50 p-4 rounded-lg border-2 border-gray-200 mb-6">
+          <div class="flex justify-between items-center">
+            <span class="text-lg font-medium text-gray-700">총 금액</span>
+            <span class="text-2xl font-bold text-blue-600" id="total-amount">₩0</span>
+          </div>
+        </div>
+
+        <!-- 제출 버튼 -->
+        <button onclick="submitRequest()" class="w-full px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-md font-medium">
+          <i class="fas fa-check mr-2"></i>요청 등록
+        </button>
+      </div>
+    </main>
+
+    <script>
+      // Supabase 설정
+      const SUPABASE_URL = 'https://qgpqhtuynxhmgawakjxe.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncHFodHV5bnhobWdhd2Frand4ZSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzMzODk0MjMwLCJleHAiOjIwNDk0NzAyMzB9.Rzo1s-uiHTIgHl8iW76CxRtpD-p0SJg10WQ7sTKKuKE';
+      const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      let state = {
+        qrCode: null,
+        locationName: null,
+        apartmentId: null,
+        frequentItems: []
+      };
+
+      let itemCounter = 0;
+
+      // 초기화
+      async function init() {
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          const qrCode = urlParams.get('qr');
+
+          if (!qrCode) {
+            throw new Error('QR 코드가 없습니다');
+          }
+
+          // QR 코드 검증
+          const { data: qrData, error: qrError } = await sb
+            .from('purchase_qr_requests')
+            .select('*')
+            .eq('qr_code', qrCode)
+            .eq('is_active', true)
+            .single();
+
+          if (qrError || !qrData) {
+            throw new Error('유효하지 않은 QR 코드입니다');
+          }
+
+          state.qrCode = qrCode;
+          state.locationName = qrData.location_name;
+          state.apartmentId = qrData.apartment_id;
+
+          // 자주 쓰는 물품 로드
+          const { data: items } = await sb
+            .from('frequent_items')
+            .select('*')
+            .eq('apartment_id', state.apartmentId)
+            .order('usage_count', { ascending: false });
+
+          state.frequentItems = items || [];
+
+          // UI 업데이트
+          document.getElementById('location-name').textContent = state.locationName;
+
+          // 첫 번째 물품 자동 추가
+          addItem();
+
+          // 로딩 숨기기
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('main-content').classList.remove('hidden');
+        } catch (err) {
+          console.error('❌ 초기화 실패:', err);
+          alert(err.message || '초기화 실패');
+          document.getElementById('loading').innerHTML = `
+            <i class="fas fa-exclamation-triangle text-red-500 text-6xl mb-4"></i>
+            <p class="text-gray-800 font-bold text-xl">${err.message || '오류가 발생했습니다'}</p>
+          `;
+        }
+      }
+
+      // 물품 추가
+      function addItem() {
+        const itemId = ++itemCounter;
+        const container = document.getElementById('items-container');
+        
+        const itemHtml = `
+          <div class="border rounded-lg p-3 bg-gray-50" data-item-id="${itemId}">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-sm font-medium text-gray-700">물품 #${itemId}</span>
+              <button onclick="removeItem(${itemId})" class="text-red-500 hover:text-red-700">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <input list="frequent-items-${itemId}" type="text" placeholder="물품명" class="item-name w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" data-item-id="${itemId}">
+                <datalist id="frequent-items-${itemId}">
+                  ${state.frequentItems.map(f => `<option value="${f.item_name}" data-price="${f.unit_price}" data-category="${f.category}">`).join('')}
+                </datalist>
+              </div>
+              <input type="number" placeholder="수량" class="item-quantity w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" min="1" value="1" onchange="calculateTotal()">
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2 mt-2">
+              <input type="number" placeholder="단가 (원)" class="item-price w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" min="0" onchange="calculateTotal()">
+              <select class="item-category w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                <option value="">카테고리 선택</option>
+                <option value="청소용품">청소용품</option>
+                <option value="운동기구">운동기구</option>
+                <option value="사무용품">사무용품</option>
+                <option value="소모품">소모품</option>
+                <option value="비품">비품</option>
+                <option value="기타">기타</option>
+              </select>
+            </div>
+          </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', itemHtml);
+        
+        // 자주 쓰는 물품 선택 시 자동 입력
+        const nameInput = container.querySelector(`[data-item-id="${itemId}"]`);
+        if (nameInput) {
+          nameInput.addEventListener('input', (e) => {
+            const selected = state.frequentItems.find(f => f.item_name === e.target.value);
+            if (selected) {
+              const itemDiv = e.target.closest('[data-item-id]');
+              itemDiv.querySelector('.item-price').value = selected.unit_price || 0;
+              itemDiv.querySelector('.item-category').value = selected.category || '';
+              calculateTotal();
+            }
+          });
+        }
+      }
+
+      // 물품 제거
+      function removeItem(itemId) {
+        const item = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (item) {
+          item.remove();
+          calculateTotal();
+        }
+      }
+
+      // 총 금액 계산
+      function calculateTotal() {
+        let total = 0;
+        document.querySelectorAll('#items-container > div').forEach(item => {
+          const quantity = parseFloat(item.querySelector('.item-quantity').value) || 0;
+          const price = parseFloat(item.querySelector('.item-price').value) || 0;
+          total += quantity * price;
+        });
+        
+        document.getElementById('total-amount').textContent = '₩' + total.toLocaleString('ko-KR');
+      }
+
+      // 요청 제출
+      async function submitRequest() {
+        const requesterName = document.getElementById('requester-name').value.trim();
+        const reason = document.getElementById('purchase-reason').value.trim();
+        
+        if (!requesterName) {
+          alert('요청자 이름을 입력하세요');
+          return;
+        }
+        
+        if (!reason) {
+          alert('구매 사유를 입력하세요');
+          return;
+        }
+        
+        // 물품 수집
+        const items = [];
+        let hasError = false;
+        
+        document.querySelectorAll('#items-container > div').forEach(itemDiv => {
+          const name = itemDiv.querySelector('.item-name').value.trim();
+          const quantity = parseInt(itemDiv.querySelector('.item-quantity').value) || 0;
+          const price = parseFloat(itemDiv.querySelector('.item-price').value) || 0;
+          const category = itemDiv.querySelector('.item-category').value;
+          
+          if (!name || quantity <= 0 || price < 0 || !category) {
+            hasError = true;
+          } else {
+            items.push({ name, quantity, price, category });
+          }
+        });
+        
+        if (hasError || items.length === 0) {
+          alert('모든 물품 정보를 정확히 입력하세요');
+          return;
+        }
+        
+        // 총 금액 계산
+        const totalAmount = items.reduce((sum, i) => sum + (i.quantity * i.price), 0);
+        
+        if (!confirm('구매 요청을 등록하시겠습니까?')) return;
+        
+        try {
+          // 구매 요청 생성
+          const { data: purchase, error: e1 } = await sb
+            .from('purchases')
+            .insert([{
+              apartment_id: state.apartmentId,
+              requester_name: requesterName,
+              requester_role: '일반 직원',
+              reason: reason,
+              total_amount: totalAmount,
+              status: 'pending'
+            }])
+            .select()
+            .single();
+          
+          if (e1) throw e1;
+          
+          // 물품 목록 생성
+          const purchaseItems = items.map(i => ({
+            purchase_id: purchase.id,
+            item_name: i.name,
+            quantity: i.quantity,
+            unit_price: i.price,
+            category: i.category
+          }));
+          
+          const { error: e2 } = await sb
+            .from('purchase_items')
+            .insert(purchaseItems);
+          
+          if (e2) throw e2;
+          
+          alert('✅ 구매 요청이 등록되었습니다!\n센터 관리자가 검토 후 승인할 예정입니다.');
+          
+          // 폼 초기화
+          document.getElementById('requester-name').value = '';
+          document.getElementById('purchase-reason').value = '';
+          document.getElementById('items-container').innerHTML = '';
+          itemCounter = 0;
+          addItem();
+        } catch (err) {
+          console.error('❌ 요청 등록 실패:', err);
+          alert('요청 등록 실패: ' + err.message);
+        }
+      }
+
+      // 초기화 실행
+      init();
+    </script>
+
+    <style>
+      .loader {
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #1b5e3e;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+</body>
+</html>

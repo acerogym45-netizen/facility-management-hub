@@ -1,0 +1,2838 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#3B82F6">
+  
+  <title>BDXI 직원 앱</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <style>
+    /* 커스텀 애니메이션 */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    .animate-pulse-slow {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    
+    /* PWA 설치 배너 */
+    .install-prompt {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1rem;
+      box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+      z-index: 9999;
+      transform: translateY(100%);
+      transition: transform 0.3s ease-out;
+    }
+    
+    .install-prompt.show {
+      transform: translateY(0);
+    }
+    
+    /* GPS 상태 표시 */
+    .gps-indicator {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      z-index: 1000;
+    }
+    
+    .gps-indicator.active {
+      background-color: #10b981;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 1);
+      animation: pulse 2s infinite;
+    }
+    
+    .gps-indicator.inactive {
+      background-color: #ef4444;
+    }
+    
+    /* 터치 피드백 */
+    .btn-touch {
+      transition: transform 0.1s ease;
+    }
+    
+    .btn-touch:active {
+      transform: scale(0.95);
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  
+  <!-- GPS 상태 표시 -->
+  <div id="gps-indicator" class="gps-indicator inactive" title="GPS 상태"></div>
+  
+  <!-- PWA 설치 안내 배너 -->
+  <div id="install-prompt" class="install-prompt">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <i class="fas fa-download text-2xl"></i>
+        <div>
+          <div class="font-bold">앱으로 설치하기</div>
+          <div class="text-sm opacity-90">홈 화면에 추가하면 더 편리하게 사용할 수 있습니다</div>
+        </div>
+      </div>
+      <button id="install-btn" class="bg-white text-purple-600 px-4 py-2 rounded-lg font-bold">
+        설치
+      </button>
+      <button id="install-close" class="ml-2 text-white opacity-75">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+  
+  <!-- 로딩 화면 -->
+  <div id="loading-screen" class="fixed inset-0 bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center z-50">
+    <div class="text-center text-white">
+      <div class="animate-pulse-slow mb-4">
+        <i class="fas fa-qrcode text-6xl"></i>
+      </div>
+      <div class="text-2xl font-bold mb-2">BDXI 직원 앱</div>
+      <div class="text-sm opacity-90">로딩 중...</div>
+    </div>
+  </div>
+  
+  <!-- 메인 컨테이너 -->
+  <div id="main-container" class="hidden pb-20">
+    
+    <!-- 헤더 -->
+    <header class="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 shadow-lg">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm opacity-90" id="header-location">위치 확인 중...</div>
+          <div class="text-xl font-bold" id="header-name">환영합니다</div>
+          <div class="text-sm" id="header-role">직원</div>
+        </div>
+        <button id="btn-logout" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition">
+          <i class="fas fa-sign-out-alt mr-2"></i>로그아웃
+        </button>
+      </div>
+    </header>
+    
+    <!-- 탭 네비게이션 -->
+    <div class="bg-white shadow-md sticky top-0 z-40">
+      <div class="flex">
+        <button class="tab-btn flex-1 py-4 font-bold border-b-2 border-blue-500 text-blue-500" data-tab="attendance">
+          <i class="fas fa-clock mr-2"></i>근태
+        </button>
+        <button class="tab-btn flex-1 py-4 font-bold border-b-2 border-transparent text-gray-500" data-tab="work">
+          <i class="fas fa-camera mr-2"></i>업무
+        </button>
+        <button class="tab-btn flex-1 py-4 font-bold border-b-2 border-transparent text-gray-500" data-tab="purchase">
+          <i class="fas fa-shopping-cart mr-2"></i>구매
+        </button>
+      </div>
+    </div>
+    
+    <!-- 탭 콘텐츠 -->
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+      
+      <!-- 근태 탭 -->
+      <div id="tab-attendance" class="tab-content">
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6 animate-fade-in">
+          <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-map-marker-alt text-blue-500 mr-2"></i>
+            현재 위치
+          </h2>
+          <div id="location-info" class="text-gray-600">
+            <div class="flex items-center gap-2 mb-2">
+              <i class="fas fa-spinner fa-spin text-blue-500"></i>
+              GPS 위치 확인 중...
+            </div>
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <button id="btn-checkin" class="btn-touch bg-gradient-to-br from-green-500 to-emerald-600 text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-sign-in-alt text-3xl mb-2"></i>
+            <div class="font-bold text-lg">출근</div>
+          </button>
+          <button id="btn-checkout" class="btn-touch bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-sign-out-alt text-3xl mb-2"></i>
+            <div class="font-bold text-lg">퇴근</div>
+          </button>
+          <button id="btn-break-start" class="btn-touch bg-gradient-to-br from-blue-500 to-cyan-600 text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-coffee text-3xl mb-2"></i>
+            <div class="font-bold text-lg">휴게 시작</div>
+          </button>
+          <button id="btn-break-end" class="btn-touch bg-gradient-to-br from-purple-500 to-pink-600 text-white rounded-xl p-6 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-play text-3xl mb-2"></i>
+            <div class="font-bold text-lg">휴게 종료</div>
+          </button>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in">
+          <h3 class="font-bold mb-4 flex items-center justify-between">
+            <span><i class="fas fa-history text-blue-500 mr-2"></i>오늘의 기록</span>
+            <div class="flex gap-2">
+              <button id="btn-open-calendar" class="text-sm text-purple-500 hover:text-purple-700 px-3 py-1 rounded-lg hover:bg-purple-50 transition">
+                <i class="fas fa-calendar-alt mr-1"></i>캘린더
+              </button>
+              <button id="btn-refresh-attendance" class="text-sm text-blue-500 hover:text-blue-700 px-3 py-1 rounded-lg hover:bg-blue-50 transition">
+                <i class="fas fa-sync-alt mr-1"></i>새로고침
+              </button>
+            </div>
+          </h3>
+          <div id="today-attendance" class="space-y-3">
+            <div class="text-center text-gray-400 py-8">
+              <i class="fas fa-clipboard-list text-4xl mb-2"></i>
+              <div>기록이 없습니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 업무 사진 탭 -->
+      <div id="tab-work" class="tab-content hidden">
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6 animate-fade-in">
+          <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-camera text-blue-500 mr-2"></i>
+            업무 사진 촬영
+          </h2>
+          
+          <div class="mb-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="before-after-toggle" class="w-5 h-5">
+              <span class="font-semibold">Before/After 모드</span>
+            </label>
+          </div>
+          
+          <div id="single-photo-mode" class="space-y-4">
+            <button id="btn-take-photo" class="btn-touch w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition">
+              <i class="fas fa-camera text-2xl mr-2"></i>사진 촬영 (단일)
+            </button>
+            <button id="btn-select-photo" class="btn-touch w-full bg-white border-2 border-blue-500 text-blue-500 py-4 rounded-xl font-bold hover:bg-blue-50 transition">
+              <i class="fas fa-images text-2xl mr-2"></i>갤러리에서 선택 (최대 30장)
+            </button>
+            <input type="file" id="file-photo" accept="image/*" capture="environment" class="hidden">
+            <input type="file" id="file-gallery" accept="image/*" multiple class="hidden">
+            
+            <!-- 선택된 사진 미리보기 -->
+            <div id="photo-preview-container" class="hidden">
+              <div class="flex items-center justify-between mb-3">
+                <span class="font-bold text-gray-700">선택한 사진 <span id="photo-count" class="text-blue-600">0</span>장</span>
+                <button id="btn-clear-photos" class="text-sm text-red-500 hover:text-red-700">
+                  <i class="fas fa-times mr-1"></i>전체 삭제
+                </button>
+              </div>
+              <div id="photo-preview-grid" class="grid grid-cols-3 gap-2 mb-4"></div>
+              
+              <!-- 메모 입력 -->
+              <div class="mb-3">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">작업 메모 (선택사항)</label>
+                <textarea id="inp-notes-single" rows="2" placeholder="예: 복도 청소 완료" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+              </div>
+              
+              <!-- 업로드 버튼 -->
+              <button id="btn-upload-photos" class="btn-touch w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition">
+                <span id="btn-upload-text"><i class="fas fa-cloud-upload-alt text-2xl mr-2"></i>업로드</span>
+                <i id="spinner-upload" class="fas fa-spinner fa-spin ml-2 hidden"></i>
+              </button>
+            </div>
+          </div>
+          
+          <div id="before-after-mode" class="hidden space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div class="border-2 border-dashed border-blue-300 rounded-xl p-4 text-center">
+                <div class="text-blue-500 font-bold mb-2">Before</div>
+                <div id="before-photo-preview" class="hidden bg-gray-100 rounded-lg aspect-square overflow-hidden mb-2">
+                  <img id="before-photo-img" class="w-full h-full object-cover">
+                </div>
+                <div id="before-photo-placeholder" class="bg-gray-100 rounded-lg aspect-square flex items-center justify-center mb-2">
+                  <i class="fas fa-image text-4xl text-gray-300"></i>
+                </div>
+                <button id="btn-before-photo" class="btn-touch w-full bg-blue-500 text-white py-2 rounded-lg text-sm">
+                  <i class="fas fa-camera mr-1"></i>촬영
+                </button>
+              </div>
+              <div class="border-2 border-dashed border-green-300 rounded-xl p-4 text-center">
+                <div class="text-green-500 font-bold mb-2">After</div>
+                <div id="after-photo-preview" class="hidden bg-gray-100 rounded-lg aspect-square overflow-hidden mb-2">
+                  <img id="after-photo-img" class="w-full h-full object-cover">
+                </div>
+                <div id="after-photo-placeholder" class="bg-gray-100 rounded-lg aspect-square flex items-center justify-center mb-2">
+                  <i class="fas fa-image text-4xl text-gray-300"></i>
+                </div>
+                <button id="btn-after-photo" class="btn-touch w-full bg-green-500 text-white py-2 rounded-lg text-sm">
+                  <i class="fas fa-camera mr-1"></i>촬영
+                </button>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="block text-sm font-semibold text-gray-700 mb-2">작업 메모 (선택사항)</label>
+              <input type="text" id="inp-notes-before-after" placeholder="예: 외부 청소 작업" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <button id="btn-submit-before-after" class="btn-touch w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+              <span id="btn-before-after-text"><i class="fas fa-check mr-2"></i>2장 모두 업로드</span>
+              <i id="spinner-before-after" class="fas fa-spinner fa-spin ml-2 hidden"></i>
+            </button>
+          </div>
+          
+          <!-- Hidden file inputs for Before/After mode -->
+          <input type="file" id="inp-before-capture" accept="image/*" capture="environment" class="hidden">
+          <input type="file" id="inp-after-capture" accept="image/*" capture="environment" class="hidden">
+          
+          <div id="photo-preview-container" class="hidden mt-4">
+            <div class="font-bold mb-2">선택한 사진</div>
+            <div id="photo-preview-grid" class="grid grid-cols-3 gap-2"></div>
+            <button id="btn-upload-photos" class="btn-touch w-full mt-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition">
+              <i class="fas fa-cloud-upload-alt text-2xl mr-2"></i>업로드
+            </button>
+          </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in">
+          <h3 class="font-bold mb-4 flex items-center justify-between">
+            <span><i class="fas fa-images text-blue-500 mr-2"></i>오늘의 사진</span>
+            <button id="btn-refresh-photos" class="text-sm text-blue-500 hover:text-blue-700">
+              <i class="fas fa-sync-alt mr-1"></i>새로고침
+            </button>
+          </h3>
+          <div id="today-photos" class="grid grid-cols-3 gap-2">
+            <div class="col-span-3 text-center text-gray-400 py-8">
+              <i class="fas fa-images text-4xl mb-2"></i>
+              <div>사진이 없습니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 구매 요청 탭 -->
+      <div id="tab-purchase" class="tab-content hidden">
+        <div class="flex gap-3 mb-6">
+          <button id="btn-new-purchase" class="btn-touch flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-4 rounded-xl font-bold shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-plus-circle text-2xl mr-2"></i>새 구매 요청
+          </button>
+          <button id="btn-my-purchases" class="btn-touch flex-1 bg-white border-2 border-blue-500 text-blue-500 py-4 rounded-xl font-bold hover:bg-blue-50 transition relative">
+            <i class="fas fa-list text-2xl mr-2"></i>내 요청 목록
+            <span id="purchase-badge" class="hidden absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">0</span>
+          </button>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-md p-6 animate-fade-in">
+          <h3 class="font-bold mb-4 flex items-center">
+            <i class="fas fa-clock text-orange-500 mr-2"></i>검수 대기 중
+          </h3>
+          <div id="pending-inspections" class="space-y-3">
+            <div class="text-center text-gray-400 py-8">
+              <i class="fas fa-clipboard-check text-4xl mb-2"></i>
+              <div>검수 대기 항목이 없습니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+    
+  </div>
+  
+  <!-- Toast 알림 -->
+  <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg z-[100] hidden transition-all">
+    <div class="flex items-center gap-2">
+      <i id="toast-icon" class="fas fa-info-circle"></i>
+      <span id="toast-message">알림</span>
+    </div>
+  </div>
+  
+  <!-- 모달들 -->
+  
+  <!-- 출퇴근 캘린더 모달 -->
+  <div id="calendar-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-purple-500 to-indigo-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-calendar-alt"></i>
+          출퇴근 캘린더
+        </h3>
+        <button onclick="app.closeCalendar()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- 월 선택 -->
+      <div class="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-b flex items-center justify-between">
+        <button onclick="app.prevMonth()" class="p-2 hover:bg-white rounded-lg transition">
+          <i class="fas fa-chevron-left text-purple-600"></i>
+        </button>
+        <div class="text-lg font-bold text-gray-800" id="calendar-month-title">2026년 5월</div>
+        <button onclick="app.nextMonth()" class="p-2 hover:bg-white rounded-lg transition">
+          <i class="fas fa-chevron-right text-purple-600"></i>
+        </button>
+      </div>
+
+      <!-- 월간 통계 -->
+      <div class="p-4 bg-gray-50 border-b grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-blue-600" id="stat-work-days">0</div>
+          <div class="text-xs text-gray-600 mt-1">근무일</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-green-600" id="stat-total-hours">0h</div>
+          <div class="text-xs text-gray-600 mt-1">총 근무시간</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-purple-600" id="stat-avg-hours">0h</div>
+          <div class="text-xs text-gray-600 mt-1">평균 근무시간</div>
+        </div>
+        <div class="bg-white rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-orange-600" id="stat-break-hours">0h</div>
+          <div class="text-xs text-gray-600 mt-1">총 휴게시간</div>
+        </div>
+      </div>
+
+      <!-- 캘린더 -->
+      <div class="p-4 md:p-6 overflow-y-auto" style="max-height: 60vh;">
+        <!-- 요일 헤더 -->
+        <div class="grid grid-cols-7 gap-1 md:gap-2 mb-2">
+          <div class="text-center text-sm font-bold text-red-500 py-2">일</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">월</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">화</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">수</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">목</div>
+          <div class="text-center text-sm font-bold text-gray-600 py-2">금</div>
+          <div class="text-center text-sm font-bold text-blue-500 py-2">토</div>
+        </div>
+        
+        <!-- 날짜 그리드 -->
+        <div id="calendar-grid" class="grid grid-cols-7 gap-1 md:gap-2">
+          <!-- Dynamic calendar cells will be inserted here -->
+        </div>
+      </div>
+
+      <!-- 범례 -->
+      <div class="p-4 bg-gray-50 border-t flex flex-wrap gap-4 justify-center text-sm">
+        <div class="flex items-center gap-2">
+          <div class="w-4 h-4 rounded bg-green-500"></div>
+          <span class="text-gray-600">정상 출퇴근</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-4 h-4 rounded bg-orange-500"></div>
+          <span class="text-gray-600">출근만</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-4 h-4 rounded bg-gray-300"></div>
+          <span class="text-gray-600">기록 없음</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-4 h-4 rounded border-2 border-blue-500"></div>
+          <span class="text-gray-600">오늘</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 사진 뷰어 모달 -->
+  <div id="photo-viewer-modal" class="hidden fixed inset-0 bg-black z-[100] flex flex-col">
+    <!-- 헤더 -->
+    <div class="flex items-center justify-between p-4 md:p-6 bg-gradient-to-b from-black/80 to-transparent z-10">
+      <div class="text-white">
+        <div class="font-bold text-lg md:text-xl" id="viewer-photo-count">1 / 1</div>
+        <div class="text-sm md:text-base text-gray-300" id="viewer-photo-time"></div>
+      </div>
+      <button onclick="app.closePhotoViewer()" class="text-white hover:bg-white/20 w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition">
+        <i class="fas fa-times text-2xl md:text-3xl"></i>
+      </button>
+    </div>
+    
+    <!-- 메인 사진 (3/4 높이) -->
+    <div class="flex-1 flex items-center justify-center relative" style="min-height: 0; height: 75%;">
+      <img id="viewer-main-image" class="max-w-full max-h-full object-contain">
+      
+      <!-- 좌우 버튼 -->
+      <button onclick="app.viewerPrevPhoto()" class="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center transition">
+        <i class="fas fa-chevron-left text-lg md:text-2xl"></i>
+      </button>
+      <button onclick="app.viewerNextPhoto()" class="absolute right-2 md:right-6 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white w-10 h-10 md:w-14 md:h-14 rounded-full flex items-center justify-center transition">
+        <i class="fas fa-chevron-right text-lg md:text-2xl"></i>
+      </button>
+    </div>
+    
+    <!-- 썸네일 영역 (1/4 높이) -->
+    <div class="bg-gradient-to-t from-black/90 to-transparent" style="height: 25%;">
+      <div class="h-full overflow-x-auto overflow-y-hidden px-2 md:px-6 py-2 md:py-4">
+        <div id="viewer-thumbnails" class="flex gap-2 md:gap-3 h-full items-center">
+          <!-- Dynamic thumbnails will be inserted here -->
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 내 구매 요청 모달 -->
+  <div id="purchase-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-indigo-500 to-purple-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-shopping-cart"></i>
+          내 구매 요청
+        </h3>
+        <button onclick="app.closePurchaseModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- 새 구매 요청 버튼 -->
+      <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+        <button onclick="app.openNewPurchaseRequest()" class="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md font-bold flex items-center justify-center gap-2">
+          <i class="fas fa-plus-circle text-xl"></i>
+          새 구매 요청
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b bg-gray-50">
+        <button onclick="app.switchPurchaseTab('pending')" id="tab-pending" class="flex-1 px-4 py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-indigo-600 transition-colors">
+          <i class="fas fa-clock mr-1"></i>검수 대기 <span id="count-pending" class="ml-1 px-2 py-0.5 text-xs font-bold bg-orange-100 text-orange-600 rounded-full">0</span>
+        </button>
+        <button onclick="app.switchPurchaseTab('all')" id="tab-all" class="flex-1 px-4 py-3 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-indigo-600 transition-colors">
+          <i class="fas fa-list mr-1"></i>전체 목록 <span id="count-all" class="ml-1 px-2 py-0.5 text-xs font-bold bg-gray-200 text-gray-600 rounded-full">0</span>
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div id="purchase-list" class="p-6 overflow-y-auto" style="max-height: 60vh;">
+        <div id="loading-purchases" class="text-center py-8">
+          <i class="fas fa-spinner fa-spin text-4xl text-indigo-600"></i>
+          <p class="mt-4 text-gray-600">불러오는 중...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 물품 검수 모달 -->
+  <div id="inspection-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-green-500 to-emerald-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-camera"></i>
+          물품 검수
+        </h3>
+        <button onclick="app.closeInspectionModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Purchase Info -->
+      <div class="p-6 border-b bg-gray-50">
+        <h4 class="text-sm font-bold text-gray-700 mb-3">구매 정보</h4>
+        <div id="inspection-purchase-info" class="space-y-2 text-sm">
+          <!-- Dynamic content -->
+        </div>
+      </div>
+
+      <!-- Inspection Form -->
+      <div class="p-6 space-y-4 overflow-y-auto" style="max-height: 50vh;">
+        <!-- Photos -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-images mr-1 text-green-600"></i>물품 사진 (최대 5장) *
+          </label>
+          <input type="file" id="inspection-photos" accept="image/*" multiple capture="environment" class="hidden">
+          <button onclick="document.getElementById('inspection-photos').click()" class="w-full px-6 py-8 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 transition-colors text-gray-500 hover:text-green-500">
+            <i class="fas fa-camera text-4xl mb-2"></i>
+            <p class="text-sm font-medium">사진 촬영 / 선택</p>
+            <p class="text-xs mt-1">물품, 영수증 등을 촬영해주세요</p>
+          </button>
+          <div id="inspection-photo-preview" class="grid grid-cols-3 gap-2 mt-3"></div>
+        </div>
+
+        <!-- Actual Amount -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-won-sign mr-1 text-green-600"></i>실제 금액 *
+          </label>
+          <input type="number" id="inspection-actual-amount" placeholder="실제 지불 금액 입력" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+        </div>
+
+        <!-- Notes -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-comment mr-1 text-green-600"></i>메모 (선택)
+          </label>
+          <textarea id="inspection-notes" rows="3" placeholder="특이사항이 있으면 입력하세요" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"></textarea>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 p-6 border-t bg-gray-50">
+        <button onclick="app.closeInspectionModal()" class="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium">
+          취소
+        </button>
+        <button onclick="app.submitInspection()" class="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-md font-medium">
+          <i class="fas fa-check-circle mr-2"></i>검수 완료
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 새 구매 요청 모달 -->
+  <div id="new-purchase-modal" class="hidden fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <!-- Header -->
+      <div class="flex justify-between items-center p-6 border-b bg-gradient-to-r from-blue-500 to-indigo-600">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fas fa-plus-circle"></i>
+          새 구매 요청
+        </h3>
+        <button onclick="app.closeNewPurchaseModal()" class="text-white hover:bg-white/20 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Form -->
+      <div class="p-6 overflow-y-auto" style="max-height: 70vh;">
+        <!-- Reason -->
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <i class="fas fa-comment-dots mr-1 text-blue-600"></i>구매 사유 *
+          </label>
+          <textarea id="new-purchase-reason" rows="3" placeholder="구매가 필요한 이유를 입력하세요" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required></textarea>
+        </div>
+
+        <!-- Items -->
+        <div class="mb-4">
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-sm font-medium text-gray-700">
+              <i class="fas fa-boxes mr-1 text-blue-600"></i>물품 목록 *
+            </label>
+            <button onclick="app.addPurchaseItemRow()" class="px-3 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+              <i class="fas fa-plus mr-1"></i>물품 추가
+            </button>
+          </div>
+          <div id="new-purchase-items" class="space-y-3">
+            <!-- Dynamic items will be added here -->
+          </div>
+        </div>
+
+        <!-- Total Amount -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-700">총 예상 금액:</span>
+            <span id="new-purchase-total" class="text-xl font-bold text-blue-600">₩0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 p-6 border-t bg-gray-50">
+        <button onclick="app.closeNewPurchaseModal()" class="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium">
+          취소
+        </button>
+        <button onclick="app.submitNewPurchaseRequest()" class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md font-medium">
+          <i class="fas fa-paper-plane mr-2"></i>요청 제출
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ==============================================
+    // BDXI 직원 PWA 앱 v2.0
+    // GPS 위치 기반 인증 시스템
+    // ==============================================
+    
+    const SUPABASE_URL = 'https://qgpqhtuynxhmgawakjxe.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncHFodHV5bnhobWdhd2FranhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyOTQyNTEsImV4cCI6MjA4Mjg3MDI1MX0.WNljQIKDbeZCDlXe8fpBdZs58XRFfujGt7lBGfq_pVg';
+    
+    const app = {
+      sb: null,
+      state: {
+        employee: null,
+        workplace: null,
+        currentLocation: null,
+        deviceFingerprint: null,
+        beforePhoto: null,
+        afterPhoto: null,
+        selectedPhotos: [],
+        currentTab: 'attendance',
+        myPurchases: [],
+        currentPurchaseTab: 'pending',
+        currentInspection: null,
+        newPurchaseItemCounter: 0,
+        todayPhotos: [],
+        currentPhotoIndex: 0,
+        calendarYear: new Date().getFullYear(),
+        calendarMonth: new Date().getMonth(), // 0-11
+        attendanceRecords: [] // 전체 출퇴근 기록 캐시
+      },
+      
+      // ==================== 초기화 ====================
+      async init() {
+        console.log('🚀 BDXI 직원 앱 초기화 시작...');
+        
+        try {
+          // Supabase 클라이언트 생성
+          this.sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          
+          // PWA 설치 프롬프트 설정
+          this.setupPWAInstall();
+          
+          // Service Worker 등록
+          await this.registerServiceWorker();
+          
+          // 기기 인증
+          await this.authenticateDevice();
+          
+          // 직원 정보 로드
+          await this.loadEmployee();
+          
+          // 근무지 정보 로드
+          await this.loadWorkplace();
+          
+          // 위치 권한 요청 및 GPS 시작
+          await this.startGPSTracking();
+          
+          // 이벤트 리스너 설정
+          this.setupEventListeners();
+          
+          // UI 렌더링
+          this.renderUI();
+          
+          // 로딩 화면 숨기기
+          document.getElementById('loading-screen').classList.add('hidden');
+          document.getElementById('main-container').classList.remove('hidden');
+          
+          console.log('✅ 앱 초기화 완료!');
+          this.showToast('환영합니다! 👋', 'success');
+          
+        } catch (error) {
+          console.error('❌ 앱 초기화 실패:', error);
+          alert('앱을 시작할 수 없습니다.\n' + error.message);
+        }
+      },
+      
+      // ==================== PWA 설치 ====================
+      setupPWAInstall() {
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+          
+          // 설치 배너 표시
+          const installPrompt = document.getElementById('install-prompt');
+          setTimeout(() => {
+            installPrompt.classList.add('show');
+          }, 3000);
+        });
+        
+        document.getElementById('install-btn').addEventListener('click', async () => {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`PWA 설치: ${outcome}`);
+            deferredPrompt = null;
+          }
+          document.getElementById('install-prompt').classList.remove('show');
+        });
+        
+        document.getElementById('install-close').addEventListener('click', () => {
+          document.getElementById('install-prompt').classList.remove('show');
+        });
+      },
+      
+      // ==================== Service Worker ====================
+      async registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+          try {
+            const registration = await navigator.serviceWorker.register('/service-worker.js');
+            console.log('✅ Service Worker 등록 완료:', registration.scope);
+          } catch (error) {
+            console.error('❌ Service Worker 등록 실패:', error);
+          }
+        }
+      },
+      
+      // ==================== 기기 인증 ====================
+      async authenticateDevice() {
+        // 브라우저 지문 생성 (간단 버전)
+        const fingerprint = await this.generateFingerprint();
+        this.state.deviceFingerprint = fingerprint;
+        
+        console.log('🔑 기기 지문:', fingerprint.substring(0, 16) + '...');
+        
+        // 로컬 스토리지에서 직원 토큰 확인
+        const savedToken = localStorage.getItem('employee_token');
+        const savedEmployeeId = localStorage.getItem('employee_id');
+        
+        if (savedToken && savedEmployeeId) {
+          console.log('✅ 저장된 인증 정보 발견');
+          return { token: savedToken, employeeId: savedEmployeeId };
+        }
+        
+        return null;
+      },
+      
+      async generateFingerprint() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText('fingerprint', 2, 2);
+        const canvasData = canvas.toDataURL();
+        
+        const data = [
+          navigator.userAgent,
+          navigator.language,
+          screen.width + 'x' + screen.height,
+          new Date().getTimezoneOffset(),
+          canvasData
+        ].join('|');
+        
+        // 간단한 해시 생성
+        let hash = 0;
+        for (let i = 0; i < data.length; i++) {
+          const char = data.charCodeAt(i);
+          hash = ((hash << 5) - hash) + char;
+          hash = hash & hash;
+        }
+        
+        return 'fp_' + Math.abs(hash).toString(36) + '_' + Date.now();
+      },
+      
+      // ==================== 직원 정보 로드 ====================
+      async loadEmployee() {
+        const savedEmployeeId = localStorage.getItem('employee_id');
+        
+        if (!savedEmployeeId) {
+          // 직원 선택 필요
+          await this.showEmployeeSelector();
+          return;
+        }
+        
+        // DB에서 직원 정보 조회
+        const { data, error } = await this.sb
+          .from('employees')
+          .select('*')
+          .eq('id', savedEmployeeId)
+          .single();
+        
+        if (error || !data) {
+          console.error('직원 정보 로드 실패:', error);
+          localStorage.removeItem('employee_id');
+          await this.showEmployeeSelector();
+          return;
+        }
+        
+        this.state.employee = data;
+        console.log('✅ 직원 정보 로드:', data.name);
+        
+        // 마지막 로그인 시간 업데이트
+        await this.sb
+          .from('employees')
+          .update({
+            device_fingerprint: this.state.deviceFingerprint,
+            last_login_at: new Date().toISOString()
+          })
+          .eq('id', savedEmployeeId);
+      },
+      
+      // ==================== 직원 선택 UI ====================
+      async showEmployeeSelector() {
+        // 이름 + 전화번호 뒷자리 4자리 입력
+        const name = prompt('이름을 입력하세요:');
+        if (!name) {
+          alert('이름이 필요합니다.');
+          location.reload();
+          return;
+        }
+        
+        const phone4 = prompt('전화번호 뒷자리 4자리를 입력하세요:\n(예: 1234)');
+        if (!phone4 || phone4.length !== 4) {
+          alert('전화번호 뒷자리 4자리를 정확히 입력해주세요.');
+          location.reload();
+          return;
+        }
+        
+        // DB에서 직원 검색 (이름 + 전화번호 뒷자리)
+        const { data: employees, error } = await this.sb
+          .from('employees')
+          .select(`
+            *,
+            apartment:apartments(code, name)
+          `)
+          .ilike('name', name);
+        
+        if (error) {
+          console.error('직원 검색 실패:', error);
+          alert('직원 검색 중 오류가 발생했습니다.');
+          location.reload();
+          return;
+        }
+        
+        if (!employees || employees.length === 0) {
+          alert('일치하는 직원을 찾을 수 없습니다.');
+          location.reload();
+          return;
+        }
+        
+        // 전화번호 뒷자리로 필터링
+        const matched = employees.filter(emp => {
+          const phone = emp.phone || '';
+          const last4 = phone.replace(/\D/g, '').slice(-4);
+          return last4 === phone4;
+        });
+        
+        if (matched.length === 0) {
+          alert('이름 또는 전화번호가 일치하지 않습니다.');
+          location.reload();
+          return;
+        }
+        
+        if (matched.length > 1) {
+          // 여러 명이면 선택 (단지 정보 포함)
+          const names = matched.map((e, i) => {
+            const aptName = e.apartment?.name || '알 수 없음';
+            const position = e.position || '직원';
+            return `${i + 1}. ${e.name} (${aptName} - ${position})`;
+          }).join('\n');
+          
+          const choice = parseInt(prompt(`여러 개의 계정이 검색되었습니다. 번호를 선택하세요:\n${names}`));
+          
+          if (!choice || choice < 1 || choice > matched.length) {
+            alert('올바른 번호를 선택해주세요.');
+            location.reload();
+            return;
+          }
+          
+          this.state.employee = matched[choice - 1];
+        } else {
+          // 한 명만 매칭
+          this.state.employee = matched[0];
+        }
+        
+        localStorage.setItem('employee_id', this.state.employee.id);
+        
+        const aptName = this.state.employee.apartment?.name || '단지 정보 없음';
+        const position = this.state.employee.position || '직원';
+        
+        console.log('✅ 직원 인증 성공:', this.state.employee.name, aptName, position);
+        
+        // 인증 성공 메시지
+        alert(`환영합니다!\n\n이름: ${this.state.employee.name}\n소속: ${aptName}\n직책: ${position}`);
+      },
+      
+      // ==================== 근무지 정보 로드 ====================
+      async loadWorkplace() {
+        if (!this.state.employee || !this.state.employee.apartment_id) {
+          console.error('❌ 직원의 단지 정보가 없습니다');
+          return;
+        }
+        
+        const { data, error } = await this.sb
+          .from('apartments')
+          .select('*')
+          .eq('id', this.state.employee.apartment_id)
+          .single();
+        
+        if (error || !data) {
+          console.error('근무지 정보 로드 실패:', error);
+          return;
+        }
+        
+        this.state.workplace = data;
+        console.log('✅ 근무지 정보 로드:', data.name);
+        console.log('📍 허용 반경:', data.allowed_radius_meters, 'm');
+      },
+      
+      // ==================== GPS 추적 시작 ====================
+      async startGPSTracking() {
+        if (!('geolocation' in navigator)) {
+          alert('이 기기는 위치 서비스를 지원하지 않습니다.');
+          return;
+        }
+        
+        try {
+          // 위치 권한 요청
+          const permission = await navigator.permissions.query({ name: 'geolocation' });
+          console.log('위치 권한 상태:', permission.state);
+          
+          // 실시간 위치 추적
+          this.watchGPS();
+          
+        } catch (error) {
+          console.error('GPS 추적 시작 실패:', error);
+        }
+      },
+      
+      watchGPS() {
+        console.log('🔍 GPS 추적 시작...');
+        console.log('📱 User Agent:', navigator.userAgent);
+        console.log('🌍 Geolocation 지원:', !!navigator.geolocation);
+        
+        // iOS Safari에서 즉시 권한 요청
+        if (!navigator.geolocation) {
+          this.showLocationError({ 
+            code: 0, 
+            message: '이 브라우저는 위치 서비스를 지원하지 않습니다.' 
+          });
+          return;
+        }
+        
+        const options = {
+          enableHighAccuracy: true,
+          timeout: 15000, // iOS를 위해 타임아웃 증가
+          maximumAge: 0
+        };
+        
+        console.log('⚙️ GPS 옵션:', options);
+        
+        navigator.geolocation.watchPosition(
+          (position) => {
+            console.log('✅ GPS 성공:', {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy
+            });
+            
+            this.state.currentLocation = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              timestamp: new Date(position.timestamp)
+            };
+            
+            // GPS 인디케이터 활성화
+            document.getElementById('gps-indicator').classList.remove('inactive');
+            document.getElementById('gps-indicator').classList.add('active');
+            
+            // 위치 정보 업데이트
+            this.updateLocationInfo();
+          },
+          (error) => {
+            console.error('❌ GPS 오류:', {
+              code: error.code,
+              message: error.message,
+              PERMISSION_DENIED: error.PERMISSION_DENIED,
+              POSITION_UNAVAILABLE: error.POSITION_UNAVAILABLE,
+              TIMEOUT: error.TIMEOUT
+            });
+            
+            document.getElementById('gps-indicator').classList.remove('active');
+            document.getElementById('gps-indicator').classList.add('inactive');
+            
+            this.showLocationError(error);
+          },
+          options
+        );
+      },
+      
+      updateLocationInfo() {
+        if (!this.state.currentLocation || !this.state.workplace) return;
+        
+        const distance = this.calculateDistance(
+          this.state.currentLocation.lat,
+          this.state.currentLocation.lng,
+          this.state.workplace.location_lat,
+          this.state.workplace.location_lng
+        );
+        
+        const accuracy = Math.round(this.state.currentLocation.accuracy);
+        const distanceRounded = Math.round(distance);
+        const allowedRadius = this.state.workplace.allowed_radius_meters;
+        
+        let statusHTML = '';
+        let statusColor = '';
+        
+        if (distance <= allowedRadius) {
+          statusColor = 'text-green-600';
+          statusHTML = `
+            <div class="flex items-center gap-2 ${statusColor}">
+              <i class="fas fa-check-circle"></i>
+              <span class="font-bold">근무지 범위 내 ✓</span>
+            </div>
+            <div class="text-sm text-gray-600 mt-2">
+              📍 거리: ${distanceRounded}m / ${allowedRadius}m<br>
+              🎯 정확도: ±${accuracy}m
+            </div>
+          `;
+        } else {
+          statusColor = 'text-orange-600';
+          statusHTML = `
+            <div class="flex items-center gap-2 ${statusColor}">
+              <i class="fas fa-exclamation-triangle"></i>
+              <span class="font-bold">근무지 범위 밖 ⚠️</span>
+            </div>
+            <div class="text-sm text-gray-600 mt-2">
+              📍 거리: ${distanceRounded}m / ${allowedRadius}m<br>
+              🎯 정확도: ±${accuracy}m<br>
+              <span class="text-orange-600">ℹ️ 출퇴근 기록은 ${allowedRadius}m 이내에서만 가능합니다</span>
+            </div>
+          `;
+        }
+        
+        document.getElementById('location-info').innerHTML = statusHTML;
+        document.getElementById('header-location').textContent = 
+          `📍 ${this.state.workplace.name} (${distanceRounded}m)`;
+      },
+      
+      showLocationError(error) {
+        let message = 'GPS 위치를 가져올 수 없습니다';
+        let showSettingsButton = false;
+        let debugInfo = '';
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+          case 1:
+            message = '위치 권한이 거부되었습니다. 설정에서 권한을 허용해주세요.';
+            showSettingsButton = true;
+            debugInfo = `(오류 코드: ${error.code} - PERMISSION_DENIED)`;
+            break;
+          case error.POSITION_UNAVAILABLE:
+          case 2:
+            message = 'GPS 신호를 받을 수 없습니다. 야외로 나가주세요.';
+            debugInfo = `(오류 코드: ${error.code} - POSITION_UNAVAILABLE)`;
+            break;
+          case error.TIMEOUT:
+          case 3:
+            message = 'GPS 위치를 가져오는데 시간이 너무 오래 걸립니다.';
+            debugInfo = `(오류 코드: ${error.code} - TIMEOUT)`;
+            break;
+          default:
+            message = error.message || 'GPS 위치를 가져올 수 없습니다';
+            debugInfo = `(오류 코드: ${error.code})`;
+        }
+        
+        console.log('🔴 위치 오류 표시:', { code: error.code, message, debugInfo });
+        
+        document.getElementById('location-info').innerHTML = `
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center gap-2 text-red-600">
+              <i class="fas fa-exclamation-circle"></i>
+              <span>${message}</span>
+            </div>
+            <div class="text-xs text-gray-500">${debugInfo}</div>
+            ${showSettingsButton ? `
+              <button 
+                onclick="app.openLocationSettings()" 
+                class="btn-touch bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2 transition"
+              >
+                <i class="fas fa-cog"></i>
+                위치 권한 설정 열기
+              </button>
+            ` : ''}
+          </div>
+        `;
+      },
+      
+      // ==================== 위치 설정 열기 ====================
+      openLocationSettings() {
+        // iOS Safari
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+          alert('📱 위치 권한 허용 방법:\n\n1. 설정 앱 열기\n2. Safari → 위치\n3. "사용하는 동안" 선택');
+          return;
+        }
+        
+        // Android Chrome
+        if (/Android/.test(navigator.userAgent)) {
+          // Chrome의 경우 설정으로 직접 이동 시도
+          const currentUrl = window.location.href;
+          
+          // Chrome 사이트 설정으로 이동
+          const settingsUrl = 'chrome://settings/content/siteDetails?site=' + encodeURIComponent(currentUrl);
+          
+          try {
+            window.open(settingsUrl, '_blank');
+          } catch (e) {
+            // 직접 열기 실패 시 안내
+            this.showToast('📱 위치 권한 허용 방법:\n\n1. 주소창 왼쪽 자물쇠/정보 아이콘 터치\n2. "권한" 또는 "사이트 설정" 선택\n3. 위치 → 허용', 'info', 5000);
+          }
+          return;
+        }
+        
+        // 기타 브라우저
+        alert('📱 위치 권한을 허용하려면:\n\n브라우저 설정에서 이 사이트의 위치 권한을 허용해주세요.');
+      },
+      
+      // ==================== 거리 계산 (Haversine) ====================
+      calculateDistance(lat1, lng1, lat2, lng2) {
+        const R = 6371e3; // 지구 반경 (미터)
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lng2 - lng1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c; // 미터
+      },
+      
+      // ==================== 위치 검증 ====================
+      async verifyLocation(requiredAction = '출퇴근') {
+        if (!this.state.currentLocation) {
+          throw new Error('GPS 위치를 가져오는 중입니다. 잠시 후 다시 시도해주세요.');
+        }
+        
+        if (!this.state.workplace) {
+          throw new Error('근무지 정보를 찾을 수 없습니다.');
+        }
+        
+        const accuracy = this.state.currentLocation.accuracy;
+        const allowedRadius = this.state.workplace.allowed_radius_meters;
+        
+        // 정확도 체크
+        if (accuracy > 100) {
+          throw new Error(
+            `GPS 정확도가 낮습니다 (±${Math.round(accuracy)}m).\n` +
+            `창문 근처나 야외로 이동해주세요.`
+          );
+        }
+        
+        // 거리 계산
+        const distance = this.calculateDistance(
+          this.state.currentLocation.lat,
+          this.state.currentLocation.lng,
+          this.state.workplace.location_lat,
+          this.state.workplace.location_lng
+        );
+        
+        // 거리 체크
+        if (distance > allowedRadius) {
+          throw new Error(
+            `${requiredAction}은(는) 근무지 ${allowedRadius}m 이내에서만 가능합니다.\n` +
+            `현재 거리: ${Math.round(distance)}m`
+          );
+        }
+        
+        return {
+          verified: true,
+          location: {
+            lat: this.state.currentLocation.lat,
+            lng: this.state.currentLocation.lng
+          },
+          accuracy: Math.round(accuracy),
+          distance: Math.round(distance)
+        };
+      },
+      
+      // ==================== 출퇴근 기록 ====================
+      async recordAttendance(type) {
+        try {
+          // GPS 위치 검증
+          const verification = await this.verifyLocation('출퇴근 기록');
+          
+          this.showToast(`${type} 기록 중...`, 'info');
+          
+          // DB에 저장 (attendance_records 테이블 사용 - scan.html과 동일)
+          const { data, error } = await this.sb
+            .from('attendance_records')
+            .insert({
+              employee_id: this.state.employee.id,
+              employee_name: this.state.employee.name,
+              apartment_id: this.state.workplace.id,
+              location_id: this.state.workplace.id,
+              attendance_type: type,
+              scan_time: new Date().toISOString(),
+              location_lat: verification.location.lat,
+              location_lng: verification.location.lng,
+              gps_accuracy: verification.accuracy,
+              distance_from_workplace: verification.distance
+            });
+          
+          if (error) throw error;
+          
+          this.showToast(`✅ ${type} 기록 완료!`, 'success');
+          
+          // 오늘의 기록 새로고침
+          await this.loadTodayAttendance();
+          
+        } catch (error) {
+          console.error('출퇴근 기록 실패:', error);
+          this.showToast(`❌ ${error.message}`, 'error');
+        }
+      },
+      
+      async loadTodayAttendance() {
+        const today = new Date().toISOString().split('T')[0];
+        
+        const { data, error} = await this.sb
+          .from('attendance_records')
+          .select('*')
+          .eq('employee_id', this.state.employee.id)
+          .gte('scan_time', today + 'T00:00:00')
+          .order('scan_time', { ascending: false });
+        
+        if (error) {
+          console.error('기록 로드 실패:', error);
+          return;
+        }
+        
+        const container = document.getElementById('today-attendance');
+        
+        if (!data || data.length === 0) {
+          container.innerHTML = `
+            <div class="text-center text-gray-400 py-8">
+              <i class="fas fa-clipboard-list text-4xl mb-2"></i>
+              <div>기록이 없습니다</div>
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = data.map(record => {
+          const time = new Date(record.scan_time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+          const typeIcons = {
+            '출근': { icon: 'fa-sign-in-alt', color: 'text-green-600', bg: 'bg-green-50' },
+            '퇴근': { icon: 'fa-sign-out-alt', color: 'text-orange-600', bg: 'bg-orange-50' },
+            '휴게 시작': { icon: 'fa-coffee', color: 'text-blue-600', bg: 'bg-blue-50' },
+            '휴게 종료': { icon: 'fa-play', color: 'text-purple-600', bg: 'bg-purple-50' }
+          };
+          const style = typeIcons[record.attendance_type] || typeIcons['출근'];
+          
+          return `
+            <div class="${style.bg} border-l-4 border-${style.color.split('-')[1]}-500 p-3 rounded">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <i class="fas ${style.icon} ${style.color}"></i>
+                  <span class="font-bold">${record.attendance_type}</span>
+                </div>
+                <span class="text-sm text-gray-600">${time}</span>
+              </div>
+              ${record.distance_from_workplace ? `
+                <div class="text-xs text-gray-500 mt-1">
+                  📍 거리: ${Math.round(record.distance_from_workplace)}m / 정확도: ±${Math.round(record.gps_accuracy)}m
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+      },
+      
+      // ==================== 업무 사진 ====================
+      // 이미지 압축 함수 (업로드 속도 개선)
+      async compressImage(file, maxWidth = 1920, quality = 0.8) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              
+              // 최대 너비 제한
+              if (width > maxWidth) {
+                height = (height * maxWidth) / width;
+                width = maxWidth;
+              }
+              
+              canvas.width = width;
+              canvas.height = height;
+              
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              canvas.toBlob((blob) => {
+                resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: file.lastModified }));
+              }, 'image/jpeg', quality);
+            };
+            img.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      },
+      
+      async handleSinglePhoto(input) {
+        if (!input.files || !input.files[0]) return;
+        
+        const file = input.files[0];
+        
+        // 12시간 이내 촬영 검증
+        const isValid = await this.validatePhotoTime(file);
+        if (!isValid) {
+          alert('⚠️ 촬영 시간 제한\n\n12시간 이내에 촬영된 사진만 업로드 가능합니다.\n오래된 사진의 재활용을 방지하기 위한 정책입니다.');
+          input.value = '';
+          return;
+        }
+        
+        // 기존 사진에 추가
+        this.state.selectedPhotos.push(file);
+        this.updatePhotoPreview();
+        input.value = '';
+      },
+      
+      async handleMultiplePhotos(input) {
+        if (!input.files || input.files.length === 0) return;
+        
+        const files = Array.from(input.files);
+        
+        // 최대 30장 제한
+        if (this.state.selectedPhotos.length + files.length > 30) {
+          this.showToast('⚠️ 최대 30장까지 선택 가능합니다', 'error');
+          input.value = '';
+          return;
+        }
+        
+        // 12시간 이내 촬영 검증
+        for (let file of files) {
+          const isValid = await this.validatePhotoTime(file);
+          if (!isValid) {
+            alert('⚠️ 촬영 시간 제한\n\n12시간 이내에 촬영된 사진만 업로드 가능합니다.\n일부 사진이 오래되어 제외되었습니다.');
+            continue;
+          }
+          this.state.selectedPhotos.push(file);
+        }
+        
+        this.updatePhotoPreview();
+        input.value = '';
+      },
+      
+      updatePhotoPreview() {
+        const container = document.getElementById('photo-preview-container');
+        const grid = document.getElementById('photo-preview-grid');
+        const count = document.getElementById('photo-count');
+        
+        if (this.state.selectedPhotos.length === 0) {
+          container.classList.add('hidden');
+          return;
+        }
+        
+        container.classList.remove('hidden');
+        count.textContent = this.state.selectedPhotos.length;
+        
+        grid.innerHTML = this.state.selectedPhotos.map((file, index) => {
+          const url = URL.createObjectURL(file);
+          return `
+            <div class="relative aspect-square rounded-lg overflow-hidden border-2 border-gray-300">
+              <img src="${url}" class="w-full h-full object-cover">
+              <button onclick="app.removePhoto(${index})" class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition">
+                <i class="fas fa-times text-xs"></i>
+              </button>
+              <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-2 py-1 text-center">
+                ${index + 1}
+              </div>
+            </div>
+          `;
+        }).join('');
+      },
+      
+      removePhoto(index) {
+        this.state.selectedPhotos.splice(index, 1);
+        this.updatePhotoPreview();
+        this.showToast('사진이 제거되었습니다', 'info');
+      },
+      
+      clearSelectedPhotos() {
+        this.state.selectedPhotos = [];
+        this.updatePhotoPreview();
+        this.showToast('모든 사진이 삭제되었습니다', 'info');
+      },
+      
+      async uploadSelectedPhotos() {
+        if (this.state.selectedPhotos.length === 0) {
+          this.showToast('⚠️ 업로드할 사진을 선택하세요', 'error');
+          return;
+        }
+        
+        const btn = document.getElementById('btn-upload-photos');
+        const spinner = document.getElementById('spinner-upload');
+        const btnText = document.getElementById('btn-upload-text');
+        
+        btn.disabled = true;
+        spinner.classList.remove('hidden');
+        
+        try {
+          const notes = document.getElementById('inp-notes-single').value || '업무 사진';
+          const groupId = String(Date.now());
+          const totalPhotos = this.state.selectedPhotos.length;
+          
+          // 진행률 표시
+          let uploaded = 0;
+          const updateProgress = () => {
+            uploaded++;
+            btnText.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>업로드 중... (${uploaded}/${totalPhotos})`;
+          };
+          
+          // 이미지 압축 (병렬 처리)
+          btnText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>이미지 압축 중...';
+          const compressedFiles = await Promise.all(
+            this.state.selectedPhotos.map(file => this.compressImage(file, 1920, 0.85))
+          );
+          
+          // 업로드 (병렬 처리, 5개씩 배치)
+          const batchSize = 5;
+          const photoRecords = [];
+          
+          for (let i = 0; i < compressedFiles.length; i += batchSize) {
+            const batch = compressedFiles.slice(i, i + batchSize);
+            const batchResults = await Promise.all(
+              batch.map(async (file, batchIndex) => {
+                const index = i + batchIndex;
+                
+                // Upload to storage
+                const ext = 'jpg'; // 압축 후 jpg로 통일
+                const fileName = `${this.state.employee.apartment_id}/${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
+                
+                const { data: uploadData, error: uploadError } = await this.sb.storage
+                  .from('cleaning-photos')
+                  .upload(fileName, file);
+                
+                if (uploadError) throw uploadError;
+                
+                const { data: { publicUrl } } = this.sb.storage
+                  .from('cleaning-photos')
+                  .getPublicUrl(fileName);
+                
+                updateProgress();
+                
+                // Return DB record
+                return {
+                  employee_name: this.state.employee.name,
+                  status: 'completed',
+                  location: this.state.workplace.name,
+                  apartment_id: this.state.employee.apartment_id,
+                  photo_url: publicUrl,
+                  notes: notes,
+                  group_id: groupId,
+                  upload_type: 'single',
+                  photo_order: index,
+                  created_at: new Date().toISOString(),
+                };
+              })
+            );
+            photoRecords.push(...batchResults);
+          }
+          
+          // DB 저장
+          btnText.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>저장 중...';
+          const { error: dbError } = await this.sb.from('cleaning_tasks').insert(photoRecords);
+          if (dbError) throw dbError;
+          
+          this.showToast(`✅ ${totalPhotos}장의 사진이 업로드되었습니다!`, 'success');
+          
+          // Reset
+          this.state.selectedPhotos = [];
+          this.updatePhotoPreview();
+          document.getElementById('inp-notes-single').value = '';
+          
+          // Reload today's photos
+          await this.loadTodayPhotos();
+          
+        } catch (e) {
+          console.error('업로드 실패:', e);
+          this.showToast('❌ 업로드 실패: ' + e.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btnText.innerHTML = '<i class="fas fa-cloud-upload-alt text-2xl mr-2"></i>업로드';
+          spinner.classList.add('hidden');
+        }
+      },
+      
+      toggleBeforeAfterMode() {
+        const toggle = document.getElementById('before-after-toggle');
+        const singleMode = document.getElementById('single-photo-mode');
+        const beforeAfterMode = document.getElementById('before-after-mode');
+        
+        if (toggle.checked) {
+          singleMode.classList.add('hidden');
+          beforeAfterMode.classList.remove('hidden');
+          // Reset photos
+          this.state.beforePhoto = null;
+          this.state.afterPhoto = null;
+          this.updateBeforeAfterUI();
+        } else {
+          singleMode.classList.remove('hidden');
+          beforeAfterMode.classList.add('hidden');
+        }
+      },
+      
+      async handleBeforeAfterPhoto(type, input) {
+        if (!input.files || !input.files[0]) return;
+        
+        const file = input.files[0];
+        
+        // 12시간 이내 촬영 검증
+        const isValid = await this.validatePhotoTime(file);
+        if (!isValid) {
+          alert('⚠️ 촬영 시간 제한\n\n12시간 이내에 촬영된 사진만 업로드 가능합니다.\n오래된 사진의 재활용을 방지하기 위한 정책입니다.');
+          input.value = '';
+          return;
+        }
+        
+        // Store photo
+        if (type === 'before') {
+          this.state.beforePhoto = file;
+        } else {
+          this.state.afterPhoto = file;
+        }
+        
+        // Update UI
+        this.updateBeforeAfterUI();
+        input.value = '';
+      },
+      
+      updateBeforeAfterUI() {
+        const beforePreview = document.getElementById('before-photo-preview');
+        const beforePlaceholder = document.getElementById('before-photo-placeholder');
+        const beforeImg = document.getElementById('before-photo-img');
+        
+        const afterPreview = document.getElementById('after-photo-preview');
+        const afterPlaceholder = document.getElementById('after-photo-placeholder');
+        const afterImg = document.getElementById('after-photo-img');
+        
+        const uploadBtn = document.getElementById('btn-submit-before-after');
+        
+        // Update Before
+        if (this.state.beforePhoto) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            beforeImg.src = e.target.result;
+            beforePreview.classList.remove('hidden');
+            beforePlaceholder.classList.add('hidden');
+          };
+          reader.readAsDataURL(this.state.beforePhoto);
+        } else {
+          beforePreview.classList.add('hidden');
+          beforePlaceholder.classList.remove('hidden');
+        }
+        
+        // Update After
+        if (this.state.afterPhoto) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            afterImg.src = e.target.result;
+            afterPreview.classList.remove('hidden');
+            afterPlaceholder.classList.add('hidden');
+          };
+          reader.readAsDataURL(this.state.afterPhoto);
+        } else {
+          afterPreview.classList.add('hidden');
+          afterPlaceholder.classList.remove('hidden');
+        }
+        
+        // Enable upload button only when both photos are ready
+        if (this.state.beforePhoto && this.state.afterPhoto) {
+          uploadBtn.disabled = false;
+        } else {
+          uploadBtn.disabled = true;
+        }
+      },
+      
+      async uploadBeforeAfter() {
+        if (!this.state.beforePhoto || !this.state.afterPhoto) {
+          this.showToast('⚠️ Before와 After 사진을 모두 선택해주세요.', 'error');
+          return;
+        }
+        
+        const btn = document.getElementById('btn-submit-before-after');
+        const spinner = document.getElementById('spinner-before-after');
+        const btnText = document.getElementById('btn-before-after-text');
+        
+        btn.disabled = true;
+        btnText.textContent = '업로드 중...';
+        spinner.classList.remove('hidden');
+        
+        try {
+          const notes = document.getElementById('inp-notes-before-after').value;
+          
+          // Upload Before photo
+          const beforeExt = this.state.beforePhoto.name.split('.').pop() || 'jpg';
+          const beforeFileName = `${this.state.employee.apartment_id}/${Date.now()}_before_${Math.random().toString(36).substr(2, 9)}.${beforeExt}`;
+          
+          const { data: beforeUpload, error: beforeError } = await this.sb.storage
+            .from('cleaning-photos')
+            .upload(beforeFileName, this.state.beforePhoto);
+          
+          if (beforeError) throw beforeError;
+          
+          const { data: { publicUrl: beforeUrl } } = this.sb.storage
+            .from('cleaning-photos')
+            .getPublicUrl(beforeFileName);
+          
+          // Upload After photo
+          const afterExt = this.state.afterPhoto.name.split('.').pop() || 'jpg';
+          const afterFileName = `${this.state.employee.apartment_id}/${Date.now()}_after_${Math.random().toString(36).substr(2, 9)}.${afterExt}`;
+          
+          const { data: afterUpload, error: afterError } = await this.sb.storage
+            .from('cleaning-photos')
+            .upload(afterFileName, this.state.afterPhoto);
+          
+          if (afterError) throw afterError;
+          
+          const { data: { publicUrl: afterUrl } } = this.sb.storage
+            .from('cleaning-photos')
+            .getPublicUrl(afterFileName);
+          
+          // Save to database
+          const groupId = String(Date.now());
+          
+          const payloads = [
+            {
+              employee_name: this.state.employee.name,
+              status: 'completed',
+              location: this.state.workplace.name,
+              apartment_id: this.state.employee.apartment_id,
+              photo_url: beforeUrl,
+              notes: notes || 'Before/After 청소 작업',
+              group_id: groupId,
+              before_after: 'before',
+              upload_type: 'before_after',
+              photo_order: 0,
+              created_at: new Date().toISOString(),
+            },
+            {
+              employee_name: this.state.employee.name,
+              status: 'completed',
+              location: this.state.workplace.name,
+              apartment_id: this.state.employee.apartment_id,
+              photo_url: afterUrl,
+              notes: notes || 'Before/After 청소 작업',
+              group_id: groupId,
+              before_after: 'after',
+              upload_type: 'before_after',
+              photo_order: 1,
+              created_at: new Date().toISOString(),
+            }
+          ];
+          
+          const { error: dbError } = await this.sb.from('cleaning_tasks').insert(payloads);
+          if (dbError) throw dbError;
+          
+          this.showToast('✅ Before/After 청소 작업이 기록되었습니다.');
+          
+          // Reset UI
+          this.state.beforePhoto = null;
+          this.state.afterPhoto = null;
+          document.getElementById('inp-notes-before-after').value = '';
+          this.updateBeforeAfterUI();
+          
+          // Reload today's photos
+          await this.loadTodayPhotos();
+          
+        } catch (e) {
+          console.error('업로드 실패:', e);
+          this.showToast('❌ 업로드 실패: ' + e.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btnText.textContent = '2장 모두 업로드';
+          spinner.classList.add('hidden');
+        }
+      },
+      
+      async validatePhotoTime(file) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const view = new DataView(e.target.result);
+              
+              // Check if JPEG (starts with FFD8)
+              if (view.getUint16(0, false) !== 0xFFD8) {
+                // Not a JPEG, use file modification time
+                const fileTime = file.lastModified;
+                const now = Date.now();
+                const hoursDiff = (now - fileTime) / (1000 * 60 * 60);
+                resolve(hoursDiff <= 12);
+                return;
+              }
+              
+              // Use file modification time (simplified version)
+              const fileTime = file.lastModified;
+              const now = Date.now();
+              const hoursDiff = (now - fileTime) / (1000 * 60 * 60);
+              resolve(hoursDiff <= 12);
+            } catch (err) {
+              console.error('사진 검증 에러:', err);
+              // On error, allow the upload
+              resolve(true);
+            }
+          };
+          reader.readAsArrayBuffer(file);
+        });
+      },
+      
+      async loadTodayPhotos() {
+        const today = new Date().toISOString().split('T')[0];
+        
+        const { data, error } = await this.sb
+          .from('cleaning_tasks')
+          .select('*')
+          .eq('employee_name', this.state.employee.name)
+          .gte('created_at', today + 'T00:00:00')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('사진 로드 실패:', error);
+          return;
+        }
+        
+        // Store photos for viewer
+        this.state.todayPhotos = data || [];
+        
+        const container = document.getElementById('today-photos');
+        
+        if (!data || data.length === 0) {
+          container.innerHTML = `
+            <div class="col-span-3 text-center text-gray-400 py-8">
+              <i class="fas fa-images text-4xl mb-2"></i>
+              <div>사진이 없습니다</div>
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = data.map((photo, index) => {
+          const time = new Date(photo.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+          const badge = photo.before_after === 'before' ? 'Before' : photo.before_after === 'after' ? 'After' : '';
+          const badgeColor = photo.before_after === 'before' ? 'bg-blue-500' : 'bg-green-500';
+          
+          return `
+            <div onclick="app.openPhotoViewer(${index})" class="relative aspect-square rounded-lg overflow-hidden shadow-md cursor-pointer hover:opacity-80 transition">
+              <img src="${photo.photo_url}" class="w-full h-full object-cover">
+              ${badge ? `<div class="${badgeColor} text-white text-xs font-bold px-2 py-1 absolute top-1 left-1 rounded">${badge}</div>` : ''}
+              <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-2 py-1">${time}</div>
+            </div>
+          `;
+        }).join('');
+      },
+      
+      // 사진 뷰어
+      openPhotoViewer(index) {
+        this.state.currentPhotoIndex = index;
+        document.getElementById('photo-viewer-modal').classList.remove('hidden');
+        this.updatePhotoViewer();
+        
+        // PC에서 키보드 네비게이션 지원
+        this.photoViewerKeyHandler = (e) => {
+          if (e.key === 'ArrowLeft') this.viewerPrevPhoto();
+          else if (e.key === 'ArrowRight') this.viewerNextPhoto();
+          else if (e.key === 'Escape') this.closePhotoViewer();
+        };
+        document.addEventListener('keydown', this.photoViewerKeyHandler);
+      },
+      
+      closePhotoViewer() {
+        document.getElementById('photo-viewer-modal').classList.add('hidden');
+        if (this.photoViewerKeyHandler) {
+          document.removeEventListener('keydown', this.photoViewerKeyHandler);
+          this.photoViewerKeyHandler = null;
+        }
+      },
+      
+      viewerPrevPhoto() {
+        if (this.state.currentPhotoIndex > 0) {
+          this.state.currentPhotoIndex--;
+          this.updatePhotoViewer();
+        }
+      },
+      
+      viewerNextPhoto() {
+        if (this.state.currentPhotoIndex < this.state.todayPhotos.length - 1) {
+          this.state.currentPhotoIndex++;
+          this.updatePhotoViewer();
+        }
+      },
+      
+      updatePhotoViewer() {
+        const photos = this.state.todayPhotos;
+        const index = this.state.currentPhotoIndex;
+        const photo = photos[index];
+        
+        // 메인 이미지
+        document.getElementById('viewer-main-image').src = photo.photo_url;
+        
+        // 카운트
+        document.getElementById('viewer-photo-count').textContent = `${index + 1} / ${photos.length}`;
+        
+        // 시간
+        const time = new Date(photo.created_at).toLocaleString('ko-KR');
+        document.getElementById('viewer-photo-time').textContent = time;
+        
+        // 썸네일
+        const thumbnails = document.getElementById('viewer-thumbnails');
+        thumbnails.innerHTML = photos.map((p, i) => `
+          <div onclick="app.openPhotoViewer(${i})" class="flex-shrink-0 h-full aspect-square rounded-lg overflow-hidden cursor-pointer ${i === index ? 'ring-4 ring-blue-500 scale-110' : 'opacity-60 hover:opacity-100 hover:scale-105'} transition-all duration-200">
+            <img src="${p.photo_url}" class="w-full h-full object-cover">
+          </div>
+        `).join('');
+        
+        // 현재 썸네일로 스크롤
+        const currentThumbnail = thumbnails.children[index];
+        if (currentThumbnail) {
+          currentThumbnail.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      },
+      
+      
+      // ==================== 출퇴근 캘린더 시스템 ====================
+      openCalendar() {
+        this.state.calendarYear = new Date().getFullYear();
+        this.state.calendarMonth = new Date().getMonth();
+        document.getElementById('calendar-modal').classList.remove('hidden');
+        this.loadMonthData();
+      },
+      
+      closeCalendar() {
+        document.getElementById('calendar-modal').classList.add('hidden');
+      },
+      
+      prevMonth() {
+        this.state.calendarMonth--;
+        if (this.state.calendarMonth < 0) {
+          this.state.calendarMonth = 11;
+          this.state.calendarYear--;
+        }
+        this.loadMonthData();
+      },
+      
+      nextMonth() {
+        this.state.calendarMonth++;
+        if (this.state.calendarMonth > 11) {
+          this.state.calendarMonth = 0;
+          this.state.calendarYear++;
+        }
+        this.loadMonthData();
+      },
+      
+      async loadMonthData() {
+        try {
+          const year = this.state.calendarYear;
+          const month = this.state.calendarMonth;
+          
+          // 월 제목 업데이트
+          document.getElementById('calendar-month-title').textContent = 
+            `${year}년 ${month + 1}월`;
+          
+          // 해당 월의 첫날과 마지막날
+          const firstDay = new Date(year, month, 1);
+          const lastDay = new Date(year, month + 1, 0);
+          
+          // 해당 월의 출퇴근 기록 가져오기
+          const { data, error } = await this.sb
+            .from('attendance_records')
+            .select('*')
+            .eq('employee_id', this.state.employee.id)
+            .gte('created_at', firstDay.toISOString())
+            .lte('created_at', lastDay.toISOString())
+            .order('created_at', { ascending: true });
+          
+          if (error) throw error;
+          
+          this.state.attendanceRecords = data || [];
+          
+          // 캘린더 렌더링
+          this.renderCalendar();
+          this.calculateMonthStats();
+        } catch (error) {
+          console.error('월별 데이터 로드 실패:', error);
+          this.showToast('캘린더 로드에 실패했습니다', 'error');
+        }
+      },
+      
+      renderCalendar() {
+        const year = this.state.calendarYear;
+        const month = this.state.calendarMonth;
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        
+        // 해당 월의 첫날과 마지막날
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const firstDayOfWeek = firstDay.getDay(); // 0=일요일
+        
+        // 날짜별 기록 그룹화
+        const recordsByDate = {};
+        this.state.attendanceRecords.forEach(record => {
+          const date = record.created_at.split('T')[0];
+          if (!recordsByDate[date]) recordsByDate[date] = [];
+          recordsByDate[date].push(record);
+        });
+        
+        const grid = document.getElementById('calendar-grid');
+        grid.innerHTML = '';
+        
+        // 빈 셀 추가 (이전 달)
+        for (let i = 0; i < firstDayOfWeek; i++) {
+          grid.innerHTML += '<div class="aspect-square"></div>';
+        }
+        
+        // 날짜 셀 추가
+        for (let day = 1; day <= daysInMonth; day++) {
+          const date = new Date(year, month, day);
+          const dateStr = date.toISOString().split('T')[0];
+          const isToday = dateStr === todayStr;
+          const records = recordsByDate[dateStr] || [];
+          
+          // 출근/퇴근 확인
+          const hasCheckIn = records.some(r => r.attendance_type === '출근');
+          const hasCheckOut = records.some(r => r.attendance_type === '퇴근');
+          
+          let bgColor = 'bg-gray-100';
+          let textColor = 'text-gray-400';
+          
+          if (hasCheckIn && hasCheckOut) {
+            bgColor = 'bg-green-100';
+            textColor = 'text-green-700';
+          } else if (hasCheckIn) {
+            bgColor = 'bg-orange-100';
+            textColor = 'text-orange-700';
+          }
+          
+          const borderClass = isToday ? 'ring-2 ring-blue-500' : '';
+          
+          // 근무 시간 계산
+          let workHours = '';
+          if (hasCheckIn && hasCheckOut) {
+            const checkInRecord = records.find(r => r.attendance_type === '출근');
+            const checkOutRecord = records.find(r => r.attendance_type === '퇴근');
+            const checkInTime = new Date(checkInRecord.created_at);
+            const checkOutTime = new Date(checkOutRecord.created_at);
+            const diff = (checkOutTime - checkInTime) / (1000 * 60 * 60);
+            workHours = `<div class="text-xs mt-1">${diff.toFixed(1)}h</div>`;
+          }
+          
+          grid.innerHTML += `
+            <div class="${bgColor} ${borderClass} rounded-lg p-2 aspect-square flex flex-col items-center justify-center cursor-pointer hover:opacity-80 transition"
+                 onclick="app.showDayDetail('${dateStr}')">
+              <div class="font-bold ${textColor}">${day}</div>
+              ${workHours}
+              ${records.length > 0 ? `<div class="text-xs text-gray-500 mt-1">${records.length}건</div>` : ''}
+            </div>
+          `;
+        }
+      },
+      
+      calculateMonthStats() {
+        const records = this.state.attendanceRecords;
+        
+        // 날짜별 그룹화
+        const dayRecords = {};
+        records.forEach(record => {
+          const date = record.created_at.split('T')[0];
+          if (!dayRecords[date]) dayRecords[date] = [];
+          dayRecords[date].push(record);
+        });
+        
+        // 근무일 수
+        const workDays = Object.keys(dayRecords).filter(date => {
+          const dayRecs = dayRecords[date];
+          return dayRecs.some(r => r.attendance_type === '출근');
+        }).length;
+        
+        // 총 근무시간 및 휴게시간
+        let totalHours = 0;
+        let totalBreakMinutes = 0;
+        
+        Object.values(dayRecords).forEach(dayRecs => {
+          const checkIn = dayRecs.find(r => r.attendance_type === '출근');
+          const checkOut = dayRecs.find(r => r.attendance_type === '퇴근');
+          
+          if (checkIn && checkOut) {
+            const diff = (new Date(checkOut.created_at) - new Date(checkIn.created_at)) / (1000 * 60 * 60);
+            totalHours += diff;
+          }
+          
+          // 휴게시간 계산
+          const breakStart = dayRecs.find(r => r.attendance_type === '휴게 시작');
+          const breakEnd = dayRecs.find(r => r.attendance_type === '휴게 종료');
+          
+          if (breakStart && breakEnd) {
+            const breakDiff = (new Date(breakEnd.created_at) - new Date(breakStart.created_at)) / (1000 * 60);
+            totalBreakMinutes += breakDiff;
+          }
+        });
+        
+        // 평균 근무시간
+        const avgHours = workDays > 0 ? totalHours / workDays : 0;
+        
+        // UI 업데이트
+        document.getElementById('stat-work-days').textContent = workDays;
+        document.getElementById('stat-total-hours').textContent = totalHours.toFixed(1) + 'h';
+        document.getElementById('stat-avg-hours').textContent = avgHours.toFixed(1) + 'h';
+        document.getElementById('stat-break-hours').textContent = (totalBreakMinutes / 60).toFixed(1) + 'h';
+      },
+      
+      showDayDetail(dateStr) {
+        const records = this.state.attendanceRecords.filter(r => 
+          r.created_at.split('T')[0] === dateStr
+        );
+        
+        if (records.length === 0) {
+          this.showToast('해당 날짜에 기록이 없습니다', 'info');
+          return;
+        }
+        
+        // 상세 정보 표시 (간단한 alert, 나중에 모달로 개선 가능)
+        const details = records.map(r => {
+          const time = new Date(r.created_at).toLocaleTimeString('ko-KR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+          return `${r.attendance_type}: ${time}`;
+        }).join('\n');
+        
+        alert(`📅 ${dateStr}\n\n${details}`);
+      },
+      
+      // ==================== 구매 요청 시스템 ====================
+      async loadPurchaseBadge() {
+        try {
+          if (!this.state.employee || !this.state.employee.id) return;
+          
+          const employeeId = this.state.employee.id;
+          const employeeName = this.state.employee.name;
+          
+          const { data, error } = await this.sb
+            .from('purchases')
+            .select('id, status')
+            .or(`requester_name.eq.${employeeName},requester_employee_id.eq.${employeeId}`)
+            .eq('status', 'approved');
+          
+          if (error) {
+            console.error('구매 배지 로드 실패:', error);
+            return;
+          }
+          
+          const pendingCount = (data || []).length;
+          const badge = document.getElementById('purchase-badge');
+          
+          if (pendingCount > 0) {
+            badge.textContent = pendingCount;
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+          }
+          
+          // Update pending inspections list
+          const container = document.getElementById('pending-inspections');
+          if (pendingCount === 0) {
+            container.innerHTML = `
+              <div class="text-center text-gray-400 py-8">
+                <i class="fas fa-clipboard-check text-4xl mb-2"></i>
+                <div>검수 대기 항목이 없습니다</div>
+              </div>
+            `;
+          } else {
+            // Load full purchase data for pending items
+            const { data: purchases } = await this.sb
+              .from('purchases')
+              .select('*, purchase_items(*)')
+              .or(`requester_name.eq.${employeeName},requester_employee_id.eq.${employeeId}`)
+              .eq('status', 'approved')
+              .order('created_at', { ascending: false });
+            
+            container.innerHTML = (purchases || []).map(p => {
+              const itemCount = (p.purchase_items || []).length;
+              const itemText = itemCount > 0 ? `${p.purchase_items[0].item_name}${itemCount > 1 ? ` 외 ${itemCount - 1}건` : ''}` : '항목 없음';
+              
+              return `
+                <div class="bg-orange-50 border-l-4 border-orange-500 p-4 rounded">
+                  <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                      <h4 class="font-bold text-gray-800">${itemText}</h4>
+                      <p class="text-xs text-gray-500 mt-1">${new Date(p.created_at).toLocaleDateString('ko-KR')}</p>
+                    </div>
+                    <span class="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">검수 대기</span>
+                  </div>
+                  <div class="text-sm text-gray-600 mb-3">
+                    <span>예상 금액: <span class="font-medium text-indigo-600">₩${parseFloat(p.total_amount).toLocaleString('ko-KR')}</span></span>
+                  </div>
+                  <button onclick="app.openInspection('${p.id}')" class="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm font-medium">
+                    <i class="fas fa-camera mr-2"></i>검수하기
+                  </button>
+                </div>
+              `;
+            }).join('');
+          }
+        } catch (err) {
+          console.error('❌ 구매 배지 로드 실패:', err);
+        }
+      },
+      
+      async showMyPurchases() {
+        if (!this.state.employee || !this.state.employee.id) {
+          this.showToast('⚠️ 직원 정보를 찾을 수 없습니다', 'error');
+          return;
+        }
+
+        document.getElementById('purchase-modal').classList.remove('hidden');
+        this.switchPurchaseTab('pending');
+        await this.loadMyPurchases();
+      },
+
+      async loadMyPurchases() {
+        try {
+          const loadingEl = document.getElementById('loading-purchases');
+          if (loadingEl) {
+            loadingEl.classList.remove('hidden');
+          }
+          
+          const employeeId = this.state.employee.id;
+          const employeeName = this.state.employee.name;
+          
+          const { data, error } = await this.sb
+            .from('purchases')
+            .select(`
+              *,
+              purchase_items(*),
+              purchase_photos(*)
+            `)
+            .or(`requester_name.eq.${employeeName},requester_employee_id.eq.${employeeId}`)
+            .order('created_at', { ascending: false });
+          
+          if (error) throw error;
+          
+          this.state.myPurchases = data || [];
+          
+          const pendingCount = data.filter(p => p.status === 'approved').length;
+          const badge = document.getElementById('purchase-badge');
+          if (badge) {
+            if (pendingCount > 0) {
+              badge.textContent = pendingCount;
+              badge.classList.remove('hidden');
+            } else {
+              badge.classList.add('hidden');
+            }
+          }
+          
+          const countPending = document.getElementById('count-pending');
+          const countAll = document.getElementById('count-all');
+          if (countPending) countPending.textContent = pendingCount;
+          if (countAll) countAll.textContent = data.length;
+          
+          this.renderPurchaseList();
+          
+          if (loadingEl) {
+            loadingEl.classList.add('hidden');
+          }
+        } catch (err) {
+          console.error('❌ 구매 요청 로드 실패:', err);
+          const loadingEl = document.getElementById('loading-purchases');
+          if (loadingEl) {
+            loadingEl.innerHTML = `
+              <div class="text-center py-8">
+                <i class="fas fa-exclamation-triangle text-4xl text-red-500"></i>
+                <p class="mt-4 text-red-600">구매 요청을 불러올 수 없습니다</p>
+              </div>
+            `;
+          }
+        }
+      },
+
+      switchPurchaseTab(tab) {
+        document.querySelectorAll('#purchase-modal button[id^="tab-"]').forEach(btn => {
+          btn.classList.remove('text-indigo-600', 'border-indigo-600');
+          btn.classList.add('text-gray-600', 'border-transparent');
+        });
+        
+        const activeTab = document.getElementById(`tab-${tab}`);
+        activeTab.classList.remove('text-gray-600', 'border-transparent');
+        activeTab.classList.add('text-indigo-600', 'border-indigo-600');
+        
+        this.state.currentPurchaseTab = tab;
+        this.renderPurchaseList();
+      },
+
+      renderPurchaseList() {
+        const container = document.getElementById('purchase-list');
+        const tab = this.state.currentPurchaseTab || 'pending';
+        
+        let filtered = this.state.myPurchases || [];
+        
+        if (tab === 'pending') {
+          filtered = filtered.filter(p => p.status === 'approved');
+        }
+        
+        if (filtered.length === 0) {
+          const message = tab === 'pending' ? '검수 대기 중인 구매 요청이 없습니다' : '구매 요청 내역이 없습니다';
+          container.innerHTML = `
+            <div class="text-center py-12">
+              <i class="fas fa-inbox text-6xl text-gray-300"></i>
+              <p class="mt-4 text-gray-500">${message}</p>
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = filtered.map(p => {
+          const statusBadge = {
+            pending: '<span class="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">승인 대기</span>',
+            approved: '<span class="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">검수 대기</span>',
+            rejected: '<span class="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">반려됨</span>',
+            completed: '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">완료</span>'
+          }[p.status];
+          
+          const itemCount = (p.purchase_items || []).length;
+          const itemText = itemCount > 0 ? `${p.purchase_items[0].item_name}${itemCount > 1 ? ` 외 ${itemCount - 1}건` : ''}` : '항목 없음';
+          
+          const canInspect = p.status === 'approved';
+          
+          return `
+            <div class="bg-white border rounded-xl p-4 mb-3 hover:shadow-md transition-shadow">
+              <div class="flex justify-between items-start mb-3">
+                <div class="flex-1">
+                  <h4 class="font-bold text-gray-800">${itemText}</h4>
+                  <p class="text-xs text-gray-500 mt-1">${new Date(p.created_at).toLocaleDateString('ko-KR')}</p>
+                </div>
+                ${statusBadge}
+              </div>
+              <div class="text-sm text-gray-600 mb-3">
+                <div class="flex justify-between">
+                  <span>예상 금액:</span>
+                  <span class="font-medium text-indigo-600">₩${parseFloat(p.total_amount).toLocaleString('ko-KR')}</span>
+                </div>
+                ${p.actual_amount ? `
+                  <div class="flex justify-between mt-1">
+                    <span>실제 금액:</span>
+                    <span class="font-medium text-green-600">₩${parseFloat(p.actual_amount).toLocaleString('ko-KR')}</span>
+                  </div>
+                ` : ''}
+              </div>
+              ${canInspect ? `
+                <button onclick="app.openInspection('${p.id}')" class="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm font-medium">
+                  <i class="fas fa-camera mr-2"></i>검수하기
+                </button>
+              ` : ''}
+              ${p.status === 'rejected' && p.rejection_reason ? `
+                <div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                  <i class="fas fa-info-circle mr-1"></i>${p.rejection_reason}
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
+      },
+
+      closePurchaseModal() {
+        document.getElementById('purchase-modal').classList.add('hidden');
+      },
+
+      async openInspection(purchaseId) {
+        try {
+          const purchase = this.state.myPurchases.find(p => p.id === purchaseId);
+          if (!purchase) {
+            this.showToast('❌ 구매 요청을 찾을 수 없습니다', 'error');
+            return;
+          }
+          
+          this.state.currentInspection = purchase;
+          
+          const infoContainer = document.getElementById('inspection-purchase-info');
+          infoContainer.innerHTML = `
+            <div class="flex justify-between">
+              <span class="text-gray-600">물품:</span>
+              <span class="font-medium">${purchase.purchase_items.map(i => i.item_name).join(', ')}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">요청일:</span>
+              <span class="font-medium">${new Date(purchase.created_at).toLocaleDateString('ko-KR')}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">예상 금액:</span>
+              <span class="font-medium text-indigo-600">₩${parseFloat(purchase.total_amount).toLocaleString('ko-KR')}</span>
+            </div>
+          `;
+          
+          document.getElementById('inspection-photos').value = '';
+          document.getElementById('inspection-photo-preview').innerHTML = '';
+          document.getElementById('inspection-actual-amount').value = '';
+          document.getElementById('inspection-notes').value = '';
+          
+          document.getElementById('inspection-photos').onchange = (e) => {
+            const files = Array.from(e.target.files).slice(0, 5);
+            const preview = document.getElementById('inspection-photo-preview');
+            preview.innerHTML = '';
+            
+            files.forEach(file => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                preview.insertAdjacentHTML('beforeend', `
+                  <img src="${e.target.result}" class="w-full h-24 object-cover rounded-lg border-2 border-green-300">
+                `);
+              };
+              reader.readAsDataURL(file);
+            });
+          };
+          
+          document.getElementById('inspection-modal').classList.remove('hidden');
+        } catch (err) {
+          console.error('❌ 검수 모달 열기 실패:', err);
+          this.showToast('❌ 오류가 발생했습니다', 'error');
+        }
+      },
+
+      closeInspectionModal() {
+        document.getElementById('inspection-modal').classList.add('hidden');
+      },
+
+      async submitInspection() {
+        const files = document.getElementById('inspection-photos').files;
+        const actualAmount = parseFloat(document.getElementById('inspection-actual-amount').value);
+        const notes = document.getElementById('inspection-notes').value;
+        
+        if (files.length === 0) {
+          this.showToast('⚠️ 사진을 업로드하세요', 'error');
+          return;
+        }
+        
+        if (!actualAmount || actualAmount <= 0) {
+          this.showToast('⚠️ 실제 금액을 입력하세요', 'error');
+          return;
+        }
+        
+        try {
+          this.showToast('📤 검수 정보를 업로드하는 중...', 'info');
+          
+          const photoUrls = [];
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const fileName = `${this.state.currentInspection.id}_${Date.now()}_${i}.jpg`;
+            
+            const { data, error } = await this.sb.storage
+              .from('purchase-photos')
+              .upload(fileName, file);
+            
+            if (error) throw error;
+            
+            const { data: urlData } = this.sb.storage
+              .from('purchase-photos')
+              .getPublicUrl(fileName);
+            
+            photoUrls.push(urlData.publicUrl);
+          }
+          
+          const photoRecords = photoUrls.map(url => ({
+            purchase_id: this.state.currentInspection.id,
+            photo_url: url,
+            uploaded_by: this.state.employee.name
+          }));
+          
+          const { error: e1 } = await this.sb
+            .from('purchase_photos')
+            .insert(photoRecords);
+          
+          if (e1) throw e1;
+          
+          const { error: e2 } = await this.sb
+            .from('purchases')
+            .update({
+              status: 'completed',
+              completion_time: new Date().toISOString(),
+              actual_amount: actualAmount,
+              inspected_by: this.state.employee.name,
+              inspected_at: new Date().toISOString(),
+              inspection_notes: notes || null
+            })
+            .eq('id', this.state.currentInspection.id);
+          
+          if (e2) throw e2;
+          
+          this.showToast('✅ 검수가 완료되었습니다!', 'success');
+          this.closeInspectionModal();
+          
+          await this.loadPurchaseBadge();
+          
+          const purchaseModal = document.getElementById('purchase-modal');
+          if (purchaseModal && !purchaseModal.classList.contains('hidden')) {
+            await this.loadMyPurchases();
+          }
+        } catch (err) {
+          console.error('❌ 검수 완료 처리 실패:', err);
+          this.showToast('❌ 검수 처리 중 오류가 발생했습니다', 'error');
+        }
+      },
+
+      openNewPurchaseRequest() {
+        document.getElementById('new-purchase-reason').value = '';
+        document.getElementById('new-purchase-items').innerHTML = '';
+        document.getElementById('new-purchase-total').textContent = '₩0';
+        
+        this.state.newPurchaseItemCounter = 0;
+        this.addPurchaseItemRow();
+        
+        document.getElementById('new-purchase-modal').classList.remove('hidden');
+      },
+
+      closeNewPurchaseModal() {
+        document.getElementById('new-purchase-modal').classList.add('hidden');
+      },
+
+      addPurchaseItemRow() {
+        const itemId = ++this.state.newPurchaseItemCounter;
+        const container = document.getElementById('new-purchase-items');
+        
+        const itemHtml = `
+          <div id="item-${itemId}" class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-xs font-medium text-gray-600">물품 #${itemId}</span>
+              ${itemId > 1 ? `<button onclick="app.removePurchaseItemRow(${itemId})" class="text-red-500 hover:text-red-700 text-xs"><i class="fas fa-times"></i></button>` : ''}
+            </div>
+            <div class="space-y-2">
+              <input type="text" id="item-name-${itemId}" placeholder="물품명" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500" required onchange="app.calculateNewPurchaseTotal()">
+              <div class="grid grid-cols-2 gap-2">
+                <input type="number" id="item-quantity-${itemId}" placeholder="수량" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500" value="1" min="1" required onchange="app.calculateNewPurchaseTotal()">
+                <input type="number" id="item-price-${itemId}" placeholder="단가" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500" min="0" required onchange="app.calculateNewPurchaseTotal()">
+              </div>
+            </div>
+          </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', itemHtml);
+      },
+
+      removePurchaseItemRow(itemId) {
+        const element = document.getElementById(`item-${itemId}`);
+        if (element) {
+          element.remove();
+          this.calculateNewPurchaseTotal();
+        }
+      },
+
+      calculateNewPurchaseTotal() {
+        let total = 0;
+        const container = document.getElementById('new-purchase-items');
+        // 직계 자식 div만 선택 (id가 "item-숫자" 형태인 것만)
+        const items = Array.from(container.children).filter(el => /^item-\d+$/.test(el.id));
+        
+        items.forEach(item => {
+          const id = item.id.split('-')[1];
+          const quantity = parseFloat(document.getElementById(`item-quantity-${id}`)?.value) || 0;
+          const price = parseFloat(document.getElementById(`item-price-${id}`)?.value) || 0;
+          total += quantity * price;
+        });
+        
+        document.getElementById('new-purchase-total').textContent = `₩${total.toLocaleString('ko-KR')}`;
+      },
+
+      async submitNewPurchaseRequest() {
+        const reason = document.getElementById('new-purchase-reason').value.trim();
+        
+        if (!reason) {
+          this.showToast('⚠️ 구매 사유를 입력하세요', 'error');
+          return;
+        }
+        
+        const container = document.getElementById('new-purchase-items');
+        // 직계 자식 div만 선택 (id가 "item-숫자" 형태인 것만)
+        const itemElements = Array.from(container.children).filter(el => /^item-\d+$/.test(el.id));
+        const items = [];
+        
+        console.log('📦 물품 항목 개수:', itemElements.length);
+        
+        for (let el of itemElements) {
+          const id = el.id.split('-')[1];
+          const nameEl = document.getElementById(`item-name-${id}`);
+          const quantityEl = document.getElementById(`item-quantity-${id}`);
+          const priceEl = document.getElementById(`item-price-${id}`);
+          
+          console.log(`물품 #${id}:`, {
+            nameEl: !!nameEl,
+            quantityEl: !!quantityEl,
+            priceEl: !!priceEl,
+            name: nameEl?.value,
+            quantity: quantityEl?.value,
+            price: priceEl?.value
+          });
+          
+          const name = nameEl?.value.trim();
+          const quantity = parseFloat(quantityEl?.value);
+          const price = parseFloat(priceEl?.value);
+          
+          console.log(`검증 결과 #${id}:`, { name, quantity, price, nameOk: !!name, qtyOk: quantity > 0, priceOk: price >= 0 });
+          
+          if (!name || !quantity || quantity <= 0 || !price || price < 0) {
+            console.error('❌ 검증 실패:', { name, quantity, price });
+            this.showToast('⚠️ 모든 물품 정보를 정확히 입력하세요', 'error');
+            return;
+          }
+          
+          items.push({ item_name: name, quantity, unit_price: price, category: '기타', subtotal: quantity * price });
+        }
+        
+        console.log('✅ 검증 통과, 총 물품:', items);
+        
+        if (items.length === 0) {
+          this.showToast('⚠️ 최소 1개 이상의 물품을 추가하세요', 'error');
+          return;
+        }
+        
+        const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+        
+        try {
+          this.showToast('📤 구매 요청을 제출하는 중...', 'info');
+          
+          const { data: purchase, error: e1 } = await this.sb
+            .from('purchases')
+            .insert([{
+              apartment_id: this.state.employee.apartment_id,
+              requester_employee_id: this.state.employee.id,
+              requester_name: this.state.employee.name,
+              requester_role: this.state.employee.position || '직원',
+              reason: reason,
+              total_amount: totalAmount,
+              status: 'pending'
+            }])
+            .select()
+            .single();
+          
+          if (e1) throw e1;
+          
+          const itemRecords = items.map(item => ({
+            purchase_id: purchase.id,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            category: item.category || '기타'
+          }));
+          
+          const { error: e2 } = await this.sb
+            .from('purchase_items')
+            .insert(itemRecords);
+          
+          if (e2) throw e2;
+          
+          this.showToast('✅ 구매 요청이 제출되었습니다!', 'success');
+          this.closeNewPurchaseModal();
+          
+          await this.loadPurchaseBadge();
+        } catch (err) {
+          console.error('❌ 구매 요청 제출 실패:', err);
+          this.showToast('❌ 구매 요청 제출에 실패했습니다', 'error');
+        }
+      },
+      
+      // ==================== 토스트 메시지 ====================
+      showToast(message, type = 'success', duration = 3000) {
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white font-bold z-50 animate-fade-in ${
+          type === 'success' ? 'bg-green-500' : 
+          type === 'error' ? 'bg-red-500' : 
+          type === 'info' ? 'bg-blue-500' : 'bg-gray-500'
+        }`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transition = 'opacity 0.3s';
+          setTimeout(() => toast.remove(), 300);
+        }, duration);
+      },
+      
+      // ==================== UI 렌더링 ====================
+      renderUI() {
+        if (this.state.employee) {
+          document.getElementById('header-name').textContent = this.state.employee.name;
+          document.getElementById('header-role').textContent = this.state.employee.position || '직원';
+        }
+        
+        // 오늘의 기록 로드
+        this.loadTodayAttendance();
+        
+        // 오늘의 사진 로드
+        this.loadTodayPhotos();
+        
+        // 구매 요청 배지 로드
+        this.loadPurchaseBadge();
+      },
+      
+      // ==================== 이벤트 리스너 ====================
+      setupEventListeners() {
+        // 탭 전환
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            this.switchTab(tab);
+          });
+        });
+        
+        // 출퇴근 버튼
+        document.getElementById('btn-checkin').addEventListener('click', () => this.recordAttendance('출근'));
+        document.getElementById('btn-checkout').addEventListener('click', () => this.recordAttendance('퇴근'));
+        document.getElementById('btn-break-start').addEventListener('click', () => this.recordAttendance('휴게 시작'));
+        document.getElementById('btn-break-end').addEventListener('click', () => this.recordAttendance('휴게 종료'));
+        
+        // 새로고침 버튼
+        document.getElementById('btn-refresh-attendance').addEventListener('click', () => this.loadTodayAttendance());
+        
+        // 캘린더 버튼
+        document.getElementById('btn-open-calendar').addEventListener('click', () => this.openCalendar());
+        
+        // 로그아웃
+        document.getElementById('btn-logout').addEventListener('click', () => {
+          if (confirm('로그아웃 하시겠습니까?')) {
+            localStorage.clear();
+            location.reload();
+          }
+        });
+        
+        // Before/After 토글
+        document.getElementById('before-after-toggle').addEventListener('change', (e) => {
+          this.toggleBeforeAfterMode();
+        });
+        
+        // 단일 사진 촬영
+        document.getElementById('btn-take-photo').addEventListener('click', () => {
+          document.getElementById('file-photo').click();
+        });
+        
+        document.getElementById('file-photo').addEventListener('change', (e) => {
+          this.handleSinglePhoto(e.target);
+        });
+        
+        // 갤러리 다중 선택
+        document.getElementById('btn-select-photo').addEventListener('click', () => {
+          document.getElementById('file-gallery').click();
+        });
+        
+        document.getElementById('file-gallery').addEventListener('change', (e) => {
+          this.handleMultiplePhotos(e.target);
+        });
+        
+        // 사진 업로드
+        document.getElementById('btn-upload-photos').addEventListener('click', () => {
+          this.uploadSelectedPhotos();
+        });
+        
+        // 전체 삭제
+        document.getElementById('btn-clear-photos').addEventListener('click', () => {
+          this.clearSelectedPhotos();
+        });
+        
+        // Before/After 사진 촬영
+        document.getElementById('btn-before-photo').addEventListener('click', () => {
+          document.getElementById('inp-before-capture').click();
+        });
+        
+        document.getElementById('btn-after-photo').addEventListener('click', () => {
+          document.getElementById('inp-after-capture').click();
+        });
+        
+        // Before/After 파일 선택
+        document.getElementById('inp-before-capture').addEventListener('change', (e) => {
+          this.handleBeforeAfterPhoto('before', e.target);
+        });
+        
+        document.getElementById('inp-after-capture').addEventListener('change', (e) => {
+          this.handleBeforeAfterPhoto('after', e.target);
+        });
+        
+        // Before/After 업로드
+        document.getElementById('btn-submit-before-after').addEventListener('click', () => {
+          this.uploadBeforeAfter();
+        });
+        
+        // 사진 새로고침
+        document.getElementById('btn-refresh-photos').addEventListener('click', () => {
+          this.loadTodayPhotos();
+        });
+        
+        // 구매 요청 버튼 (scan.html의 모달 재사용)
+        document.getElementById('btn-new-purchase').addEventListener('click', () => {
+          this.openNewPurchaseRequest();
+        });
+        
+        document.getElementById('btn-my-purchases').addEventListener('click', () => {
+          this.showMyPurchases();
+        });
+      },
+      
+      // ==================== 탭 전환 ====================
+      switchTab(tab) {
+        // 탭 버튼 스타일
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          if (btn.dataset.tab === tab) {
+            btn.classList.add('border-blue-500', 'text-blue-500');
+            btn.classList.remove('border-transparent', 'text-gray-500');
+          } else {
+            btn.classList.remove('border-blue-500', 'text-blue-500');
+            btn.classList.add('border-transparent', 'text-gray-500');
+          }
+        });
+        
+        // 탭 콘텐츠
+        document.querySelectorAll('.tab-content').forEach(content => {
+          content.classList.add('hidden');
+        });
+        document.getElementById(`tab-${tab}`).classList.remove('hidden');
+        
+        this.state.currentTab = tab;
+      },
+      
+      // ==================== Toast 알림 ====================
+      showToast(message, type = 'info') {
+        const toast = document.getElementById('toast');
+        const icon = document.getElementById('toast-icon');
+        const text = document.getElementById('toast-message');
+        
+        const icons = {
+          success: 'fa-check-circle',
+          error: 'fa-exclamation-circle',
+          warning: 'fa-exclamation-triangle',
+          info: 'fa-info-circle'
+        };
+        
+        const colors = {
+          success: 'bg-green-600',
+          error: 'bg-red-600',
+          warning: 'bg-orange-600',
+          info: 'bg-gray-800'
+        };
+        
+        icon.className = `fas ${icons[type] || icons.info}`;
+        toast.className = `fixed top-4 left-1/2 transform -translate-x-1/2 ${colors[type] || colors.info} text-white px-6 py-3 rounded-lg shadow-lg z-[100] transition-all`;
+        text.textContent = message;
+        
+        toast.classList.remove('hidden');
+        
+        setTimeout(() => {
+          toast.classList.add('hidden');
+        }, 3000);
+      }
+    };
+    
+    // ==================== 앱 시작 ====================
+    // 전역 스코프에 노출 (HTML onclick에서 사용하기 위해)
+    window.app = app;
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      app.init();
+    });
+  </script>
+</body>
+</html>

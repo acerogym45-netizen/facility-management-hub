@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>레슨 신청 - 청주SK뷰자이</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    <style>
+        /* progress-indicator는 main.js data-step 참조용으로만 존재, 화면에는 숨김 */
+        .progress-indicator { display:none !important; }
+    </style>
+</head>
+<body>
+
+    <!-- ── 로딩 화면 ── -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-logo"><i class="fas fa-building"></i></div>
+        <div class="loading-spinner"></div>
+        <p>시스템 초기화 중...</p>
+    </div>
+
+    <!-- ── 메인 컨테이너 ── -->
+    <div id="mainContainer" class="container" style="display:none">
+
+        <!-- 헤더 -->
+        <header class="header" id="mainHeader">
+            <div class="header-logo" id="adminTrigger">
+                <div class="header-icon-wrap">
+                    <i class="fas fa-building"></i>
+                </div>
+                <div class="header-text">
+                    <h1 id="logoText">청주SK뷰자이</h1>
+                </div>
+            </div>
+            <div class="header-actions">
+                <!-- pageTitle: main.js에서 텍스트 변경용, 화면엔 보이지 않음 -->
+                <span id="pageTitle" style="display:none">필라테스 레슨 신청서</span>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <!-- 취소·변경 기간 배지용 hidden 요소 (initManageTabBar에서 참조) -->
+                    <span id="headerManageBadge" style="display:none"></span>
+                    <button id="headerManageBtn" style="display:none"></button>
+                    <button class="btn-ghost" onclick="showMyInquiryModal()" style="font-size:.82rem;padding:6px 10px;background:#4f46e5;color:#fff;border-radius:8px">
+                        <i class="fas fa-search"></i> 내 문의 조회
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 프로그레스 스텝 (main.js data-step 참조용, 숨김 처리) -->
+        <div class="progress-indicator" aria-hidden="true">
+            <div class="progress-step active" data-step="1"><div class="step-number">1</div></div>
+            <div class="progress-line"></div>
+            <div class="progress-step" data-step="2"><div class="step-number">2</div></div>
+        </div>
+
+        <!-- ★ 내 신청 취소/변경 탭바 → 숨김 (중복 제거, 기능은 퀵액션으로 통합) -->
+        <div id="myManageTabBar" style="display:none">
+            <!-- 하위 호환: initManageTabBar에서 참조하는 요소 유지 -->
+            <button id="manageTabBtn" style="display:none"></button>
+            <span id="manageTabPeriodBadge" style="display:none">20~27일</span>
+        </div>
+
+        <!-- 📅 접수 기간 안내 배너 (동적 표시) -->
+        <div id="periodBanner" style="display:none"></div>
+
+        <!-- 퀵 액션 버튼 (3행 구성) -->
+        <div class="quick-actions-wrap">
+
+            <!-- 1행: 내 문의 조회 (단독 전체 너비) -->
+            <div class="quick-row quick-row--single">
+                <button class="quick-btn quick-btn--inquiry-main" onclick="showMyInquiryModal()">
+                    <i class="fas fa-search"></i>
+                    <span>내 문의 조회</span>
+                </button>
+            </div>
+
+            <!-- 2행: 커리큘럼 / 강사 소개 / 공지사항 / 문의하기 -->
+            <div class="quick-row quick-row--four">
+                <button class="quick-btn" onclick="showCurriculumModal()">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>커리큘럼</span>
+                </button>
+                <button class="quick-btn" onclick="openInstructorsModal()">
+                    <i class="fas fa-user-tie"></i>
+                    <span>강사 소개</span>
+                </button>
+                <button class="quick-btn" onclick="scrollToNotices()">
+                    <i class="fas fa-bullhorn"></i>
+                    <span>공지사항</span>
+                </button>
+                <button class="quick-btn" onclick="showInquiryForm()">
+                    <i class="fas fa-pen"></i>
+                    <span>문의하기</span>
+                </button>
+            </div>
+
+            <!-- 3행: 내 문의 조회 / 내 신청 조회·취소·변경 / 해지 신청 -->
+            <div class="quick-row quick-row--three">
+                <button class="quick-btn quick-btn--accent" onclick="showMyInquiryModal()">
+                    <i class="fas fa-search"></i>
+                    <span>내 문의 조회</span>
+                </button>
+                <button class="quick-btn quick-btn--accent" onclick="showMyManageModal()">
+                    <i class="fas fa-list-check"></i>
+                    <span>내 신청 조회·취소·변경</span>
+                </button>
+                <!-- 환불 신청 버튼 비활성화 (2026-05 환불 제도 폐지로 숨김 처리) -->
+                <!-- <button class="quick-btn quick-btn--accent" onclick="showRefundRequestModal()">
+                    <i class="fas fa-won-sign"></i>
+                    <span>환불 신청</span>
+                </button> -->
+                <button class="quick-btn quick-btn--accent" onclick="showCancellationForm()">
+                    <i class="fas fa-file-signature"></i>
+                    <span>해지 신청</span>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- 공지사항 -->
+        <section id="noticesSection" class="card-section" style="display:none">
+            <div class="section-header">
+                <h3><i class="fas fa-bullhorn"></i> 공지사항</h3>
+            </div>
+            <div id="noticesContainer"></div>
+        </section>
+
+        <!-- ── Step 1: 신청서 ── -->
+        <section id="page1" class="card-section">
+            <div class="section-header">
+                <h3><i class="fas fa-edit"></i> 레슨 신청서</h3>
+                <span class="step-badge">Step 1 / 2</span>
+            </div>
+
+            <form id="contractForm" class="form-body" novalidate>
+
+                <fieldset class="form-fieldset">
+                    <legend><i class="fas fa-user"></i> 기본 정보</legend>
+
+                    <!-- 동/호수 입력 + 확인 -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dong">동 <span class="required">*</span></label>
+                            <input type="text" id="dong" placeholder="예: 101" inputmode="numeric" autocomplete="off"
+                                   oninput="filterNumericOnly(this); checkConfirmMatch('dong','dongConfirm','dongConfirmWrap')">
+                        </div>
+                        <div class="form-group">
+                            <label for="ho">호수 <span class="required">*</span></label>
+                            <input type="text" id="ho" placeholder="예: 1001" inputmode="numeric" autocomplete="off"
+                                   oninput="filterNumericOnly(this); checkConfirmMatch('ho','hoConfirm','hoConfirmWrap')">
+                        </div>
+                    </div>
+                    <div class="form-row" id="dongHoConfirmRow">
+                        <div class="form-group" id="dongConfirmWrap">
+                            <label for="dongConfirm">동 확인 <span class="required">*</span></label>
+                            <input type="text" id="dongConfirm" placeholder="동을 다시 입력하세요" inputmode="numeric" autocomplete="off"
+                                   oninput="filterNumericOnly(this); checkConfirmMatch('dong','dongConfirm','dongConfirmWrap')">
+                            <div class="mismatch-msg" id="dongMismatch">
+                                <i class="fas fa-exclamation-circle"></i>
+                                일치하지 않습니다. 관리비 부과 및 SMS 발송을 위하여 반드시 정확하게 입력해 주세요.
+                            </div>
+                        </div>
+                        <div class="form-group" id="hoConfirmWrap">
+                            <label for="hoConfirm">호수 확인 <span class="required">*</span></label>
+                            <input type="text" id="hoConfirm" placeholder="호수를 다시 입력하세요" inputmode="numeric" autocomplete="off"
+                                   oninput="filterNumericOnly(this); checkConfirmMatch('ho','hoConfirm','hoConfirmWrap')">
+                            <div class="mismatch-msg" id="hoMismatch">
+                                <i class="fas fa-exclamation-circle"></i>
+                                일치하지 않습니다. 관리비 부과 및 SMS 발송을 위하여 반드시 정확하게 입력해 주세요.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 이름 -->
+                    <div class="form-group">
+                        <label for="name">이름 <span class="required">*</span></label>
+                        <input type="text" id="name" placeholder="이름을 입력하세요" autocomplete="off">
+                    </div>
+
+                    <!-- 전화번호 입력 + 확인 -->
+                    <div class="form-group">
+                        <label for="phone">전화번호 <span class="required">*</span></label>
+                        <input type="tel" id="phone" placeholder="010-0000-0000" autocomplete="off"
+                               oninput="formatPhoneNumber(); checkConfirmMatch('phone','phoneConfirm','phoneConfirmWrap')">
+                    </div>
+                    <div class="form-group" id="phoneConfirmWrap">
+                        <label for="phoneConfirm">전화번호 확인 <span class="required">*</span></label>
+                        <input type="tel" id="phoneConfirm" placeholder="전화번호를 다시 입력하세요" autocomplete="off"
+                               oninput="formatPhoneNumber(event); checkConfirmMatch('phone','phoneConfirm','phoneConfirmWrap')">
+                        <div class="mismatch-msg" id="phoneMismatch">
+                            <i class="fas fa-exclamation-circle"></i>
+                            일치하지 않습니다. 관리비 부과 및 SMS 발송을 위하여 반드시 정확하게 입력해 주세요.
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="form-fieldset">
+                    <legend><i class="fas fa-dumbbell"></i> 레슨 선택</legend>
+
+                    <div class="form-group">
+                        <label for="lessonType">프로그램 <span class="required">*</span></label>
+                        <select id="lessonType" required>
+                            <option value="">-- 프로그램 로딩 중... --</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="preferredTimeGroup">
+                        <label for="preferredTime">희망 시간대 <span class="required">*</span></label>
+                        <select id="preferredTime" required disabled>
+                            <option value="">먼저 프로그램을 선택하세요</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="customTimeGroup" style="display:none">
+                        <label>희망 요일 및 시간 <span class="required">*</span></label>
+                        <textarea
+                            id="customTime"
+                            placeholder="희망하시는 요일과 시간을 입력해주세요.&#10;&#10;예시:&#10;• 월수금 오후 2시&#10;• 화목 오후 3시"
+                            rows="4"></textarea>
+                        <small style="color:#7f8c8d; font-size:.78rem; margin-top:4px; display:block;">
+                            (예: 월수금 오후 2시, 화목 오후 3시)
+                        </small>
+                    </div>
+                </fieldset>
+
+                <div class="consent-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="agreement" required>
+                        <span>개인정보 수집 및 이용에 동의합니다 <span class="required">*</span></span>
+                    </label>
+                    <div class="consent-detail">
+                        수집항목: 동호수, 이름, 전화번호 &nbsp;|&nbsp;
+                        목적: 레슨 신청 처리 &nbsp;|&nbsp;
+                        보유기간: 계약 종료 후 1년
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary btn-full" style="margin-top:4px">
+                    <i class="fas fa-arrow-right"></i> 계약서 확인하기
+                </button>
+            </form>
+        </section>
+
+        <!-- ── Step 2: 계약서 ── -->
+        <section id="page2" class="card-section" style="display:none">
+            <div class="section-header">
+                <h3><i class="fas fa-file-contract"></i> 레슨 이용계약서</h3>
+                <span class="step-badge">Step 2 / 2</span>
+            </div>
+
+            <div class="form-body">
+
+                <!-- ⚠️ 신청·해지 기간 필수 안내 박스 (계약서 상단) -->
+                <div class="period-notice-box">
+                    <div class="period-notice-title"><i class="fas fa-calendar-check"></i> 신청·해지 기간 필수 안내</div>
+                    <div class="period-notice-grid">
+                        <div class="period-notice-item period-enroll">
+                            <span class="period-label">📝 등록 접수</span>
+                            <span class="period-date">매월 <strong>22일 09시 ~ 26일 09시</strong></span>
+                            <span class="period-desc">이 기간에만 신규 등록 가능</span>
+                        </div>
+                        <div class="period-notice-item period-cancel">
+                            <span class="period-label">🚫 해지 신청</span>
+                            <span class="period-date">매월 <strong>22일 09시 ~ 26일 09시</strong></span>
+                            <span class="period-desc">당월 수강 후 익월부터 해지</span>
+                        </div>
+                    </div>
+                    <div class="period-notice-auto">
+                        <i class="fas fa-sync-alt"></i>
+                        <strong>자동 재등록 안내:</strong> 매월 22일 09시~26일 09시 사이에 해지 신청을 하지 않으면 <strong>다음 달 수강료가 자동 청구</strong>되며 수업이 자동 연장됩니다.
+                    </div>
+                </div>
+
+                <!-- 신청 정보 확인 -->
+                <div class="contract-summary">
+                    <div class="summary-row">
+                        <span>동호수</span>
+                        <strong><span id="displayDong"></span>&nbsp;<span id="displayHo"></span></strong>
+                    </div>
+                    <div class="summary-row"><span>이름</span>    <strong id="displayName"></strong></div>
+                    <div class="summary-row"><span>연락처</span>  <strong id="displayPhone"></strong></div>
+                    <div class="summary-row"><span>프로그램</span><strong id="displayLesson"></strong></div>
+                    <div class="summary-row"><span>희망 시간</span><strong id="displayTime"></strong></div>
+                </div>
+
+                <button type="button" class="btn-secondary btn-sm" onclick="goToPage1()" style="margin-bottom:16px">
+                    <i class="fas fa-edit"></i> 정보 수정
+                </button>
+
+                <!-- 해지·환불 규정 박스 -->
+                <div class="policy-box policy-refund">
+                    <div class="policy-box-header">
+                        <i class="fas fa-exclamation-circle"></i>
+                        해지 및 환불 규정 <span class="policy-required-tag">필독 · 필수 동의</span>
+                    </div>
+                    <div class="policy-content">
+                        <div class="policy-sub-title">📋 해지 방식</div>
+                        <ul>
+                            <li>해지는 <strong>기간 내 정상 신청</strong>을 통해서만 가능합니다.</li>
+                            <li>해지 신청이 접수되면 <strong>즉시 자동 승인</strong>되며, 당월은 정상 수강 후 <strong>익월부터 해지</strong>가 적용됩니다.</li>
+                            <li>해지 신청 후 <strong>번복이 불가</strong>합니다. 신중하게 신청해 주세요.</li>
+                        </ul>
+                        <div class="policy-sub-title policy-mt">💰 환불금 정산 방식</div>
+                        <ul>
+                            <li>환불은 <strong>천재지변 · 질병 · 부상 등 불가피한 사유</strong>에 한해 예외적으로 검토됩니다.</li>
+                            <li>환불금 산정 기준: <strong>위약금(원금의 10%)</strong> + <strong>진행 횟수분 차감</strong> 후 잔여 금액 지급</li>
+                            <li>단순 변심 · 취업 · 이직 · 출장 · 여행 · 타 센터 이동 등의 사유는 환불 대상에서 제외됩니다.</li>
+                            <li>강사 교체 · 수업 구성원 변경 등 수업 내 인적 사유는 환불 대상에서 제외됩니다.</li>
+                        </ul>
+                        <div class="policy-sub-title policy-mt">📅 해지 신청 기간</div>
+                        <ul>
+                            <li>해지를 원하시면 <strong>매월 22일 09:00 ~ 26일 09:00 (KST)</strong> 사이에 해지 신청을 완료해 주세요.</li>
+                            <li>기간 외 접수는 불가하며, 해지 신청을 하지 않으면 다음 달 수강료가 자동 청구됩니다.</li>
+                        </ul>
+                        <div class="policy-notice">
+                            ※ 해지 신청은 반드시 본 시스템(온라인)을 통해 제출해야 하며, SMS · 통화 등 구두(口頭) 요청은 인정되지 않습니다.
+                        </div>
+                    </div>
+                    <label class="policy-consent-label">
+                        <input type="checkbox" id="refundAgreement" required>
+                        <span>위 <strong>해지 및 환불 규정</strong>을 모두 읽고 이해하였으며 동의합니다 <span class="required">*</span></span>
+                    </label>
+                </div>
+
+
+                <!-- 이용약관 -->
+                <div class="terms-box">
+                    <div class="terms-section">
+                        <strong>① 본인 외 사용 불가</strong>
+                        <p>본인 이외에 사용하실 수 없습니다.</p>
+                    </div>
+                    <div class="terms-section">
+                        <strong>② 환불 규정</strong>
+                        <p>환불은 천재지변 · 질병 · 부상 등 불가피한 사유에 한해 예외적으로 검토되며, 환불금은 <strong>위약금(원금의 10%) + 진행 횟수분 차감</strong> 후 잔여 금액을 지급합니다. 단순 변심 · 취업 · 이직 · 출장 등의 사유는 환불 대상에서 제외됩니다. 해지를 원하시는 경우 매월 22일 09시~26일 09시 해지 신청 기간 내에 온라인으로 접수해 주세요.</p>
+                    </div>
+                    <div class="terms-section">
+                        <strong>③ 사고 면책</strong>
+                        <p>본인 부주의로 발생한 사고에 대해서는 일체 책임을 지지 않습니다.</p>
+                    </div>
+                    <div class="terms-section">
+                        <strong>④ 수업 운영</strong>
+                        <p>수업은 횟수제입니다. 공휴일은 휴무이며 공휴일 기간에는 수업이 차감되지 않습니다. 수업은 지정요일 지정시간에만 수업이 가능하며, 못나올 경우 기간은 차감됩니다.</p>
+                    </div>
+                    <div class="terms-section">
+                        <strong>⑤ 그룹 수업 구성</strong>
+                        <p>수업은 6:1 그룹수업 혹은 강사와의 협의에 따라 2:1 혹은 개인레슨으로 진행되며 4명 미만이 1개월 이상 지속될 시 기간은 정지되며, 다음 차순 그룹이 구성될 경우 수업이 가능합니다.</p>
+                    </div>
+                    <div class="terms-section">
+                        <strong>⑥ 건강 상태</strong>
+                        <p>신체적 기능이나 문제가 있을 시 의사 또는 전문의와 반드시 상담하셔야 하며, 동작 수행 중 상태가 악화될 경우 당사는 어떠한 책임도 지지 않습니다.</p>
+                    </div>
+                    <div class="terms-section">
+                        <strong>⑦ 양도·양수</strong>
+                        <p>지인에게 상품 재판매 혹은 양도 시, 다음 회차에 바로 이어서 하지 않으시는 경우 횟수는 차감됩니다.</p>
+                    </div>
+                    <div class="terms-section terms-section-highlight">
+                        <strong>⑧ 자동 연장 및 해지 신청</strong>
+                        <p>신청서는 최초 1회 작성 후 <strong style="color:#e53e3e">해지 신청서를 제출하지 않으시면 자동 연장</strong>됩니다.<br>
+                        해지를 원하시면 <strong style="color:#e53e3e">매월 22일 09시 ~ 26일 09시</strong> 사이에 반드시 해지 신청을 완료해주세요.<br>
+                        해지 신청 접수 즉시 자동 승인되며, <strong>당월은 정상 수강 후 익월부터 해지</strong>가 적용됩니다.<br>
+                        해지 신청 후 번복이 불가하며, 기간 이외에는 접수가 불가합니다.</p>
+                    </div>
+                </div>
+
+                <div class="consent-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="termsAgreement" required>
+                        <span>위 이용약관 전체 (①~⑧)를 모두 읽고 동의합니다 <span class="required">*</span></span>
+                    </label>
+                </div>
+
+                <!-- 전자 서명 -->
+                <div class="signature-section">
+                    <label>서명자 성명 <span class="required">*</span></label>
+                    <input type="text" id="signatureName" placeholder="성명을 입력하세요" style="margin-bottom:12px">
+
+                    <label>전자 서명 <span class="required">*</span></label>
+                    <!-- 서명 안내 경고 박스 -->
+                    <div style="background:#fff5f5;border:1.5px solid #fc8181;border-radius:8px;
+                                padding:9px 13px;margin-bottom:8px;font-size:.8rem;color:#c53030;line-height:1.65">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong> 서명 필수 안내</strong><br>
+                        반드시 본인 서명을 직접 작성해주세요.<br>
+                        <strong>미작성 또는 부실한 서명(점, 선 하나 등)은 승인되지 않으며 자동 거부됩니다.</strong>
+                    </div>
+                    <div class="signature-canvas-wrapper">
+                        <canvas id="signaturePad"></canvas>
+                        <button type="button" class="btn-clear-sig" onclick="clearSignature()">
+                            <i class="fas fa-undo"></i> 지우기
+                        </button>
+                    </div>
+                    <small style="color:#7f8c8d; font-size:.78rem; margin-top:5px; display:block;">
+                        ※ 손가락이나 마우스로 위 칸에 서명해주세요.
+                    </small>
+
+                    <div class="form-group" style="margin-top:12px">
+                        <label for="signatureDate">서명 날짜</label>
+                        <input type="date" id="signatureDate" readonly>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button type="button" class="btn-secondary" onclick="goToPage1()">
+                        <i class="fas fa-arrow-left"></i> 이전
+                    </button>
+                    <button type="button" class="btn-primary" onclick="submitContract()">
+                        <i class="fas fa-paper-plane"></i> 신청 완료
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 공개 문의 목록 -->
+        <section class="card-section" style="margin-bottom:0">
+            <div class="section-header">
+                <h3><i class="fas fa-list"></i> 공개 문의 목록</h3>
+            </div>
+            <div id="inquiriesContainer">
+                <div class="empty-hint">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 0">
+                        <i class="fas fa-inbox" style="font-size:2rem;opacity:.35"></i>
+                        <span>아직 등록된 문의가 없습니다</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div><!-- /#mainContainer -->
+
+
+    <!-- ══════════════════════════════════════════════
+         MODALS
+         Bottom-sheet:  .modal  →  .modal.active
+         Center-dialog: .modal.center  →  .modal.center.active
+    ══════════════════════════════════════════════ -->
+
+    <!-- ─── 내 문의 조회 모달 ─────────────────────────────────────────── -->
+    <div id="myInquiryModal"
+         style="display:none;position:fixed;inset:0;z-index:9999;
+                background:rgba(17,24,39,.55);backdrop-filter:blur(2px);
+                overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 12px">
+        <div style="max-width:480px;width:100%;border-radius:14px;overflow:hidden;
+                    background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.25);margin:auto">
+            <!-- 헤더 -->
+            <div style="background:var(--color-primary,#4f46e5);color:#fff;padding:14px 18px;
+                        display:flex;align-items:center;justify-content:space-between">
+                <span style="font-weight:700;font-size:1rem"><i class="fas fa-search"></i> 내 문의 조회</span>
+                <button onclick="closeMyInquiryModal()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <!-- 입력 폼 -->
+            <div style="padding:16px 18px">
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;
+                            padding:10px 12px;margin-bottom:14px;font-size:.81rem;color:#1e40af;line-height:1.65">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>동·호수·전화번호 끝 4자리</strong>를 입력하면 내가 등록한 문의와 답변을 확인할 수 있습니다.
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    <div style="display:flex;gap:8px">
+                        <div style="flex:1">
+                            <label style="font-size:.8rem;font-weight:600;color:#374151;display:block;margin-bottom:3px">동 <span style="color:#e53e3e">*</span></label>
+                            <input type="text" id="myInqDong" placeholder="예: 101"
+                                   style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:7px;font-size:.88rem"
+                                   oninput="this.style.borderColor='#d1d5db'">
+                        </div>
+                        <div style="flex:1">
+                            <label style="font-size:.8rem;font-weight:600;color:#374151;display:block;margin-bottom:3px">호수 <span style="color:#e53e3e">*</span></label>
+                            <input type="text" id="myInqHo" placeholder="예: 1001"
+                                   style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:7px;font-size:.88rem"
+                                   oninput="this.style.borderColor='#d1d5db'">
+                        </div>
+                        <div style="flex:1">
+                            <label style="font-size:.8rem;font-weight:600;color:#374151;display:block;margin-bottom:3px">전화 끝 4자리 <span style="color:#e53e3e">*</span></label>
+                            <input type="tel" id="myInqPhone4" placeholder="예: 5678" maxlength="4" inputmode="numeric"
+                                   style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #d1d5db;border-radius:7px;font-size:.88rem"
+                                   oninput="this.style.borderColor='#d1d5db'">
+                        </div>
+                    </div>
+                    <!-- 이름 필드 제거: 동+호수+전화번호 뒤4자리로 조회 -->
+                    <input type="hidden" id="myInqName" value="">
+                </div>
+                <button onclick="searchMyInquiries()"
+                        style="width:100%;margin-top:12px;padding:11px;border:none;border-radius:8px;
+                               background:var(--color-primary,#4f46e5);color:#fff;font-size:.92rem;font-weight:700;cursor:pointer">
+                    <i class="fas fa-search"></i> 조회하기
+                </button>
+            </div>
+            <!-- 결과 영역 -->
+            <div id="myInquiryResult" style="padding:0 18px 18px"></div>
+        </div>
+    </div>
+
+    <!-- 문의 작성 모달 (bottom-sheet) -->
+    <div id="inquiryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-pen"></i> 문의하기</h2>
+                <button class="modal-close" onclick="closeInquiryModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="inquiryForm" onsubmit="submitInquiry(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="inquiryDong">동</label>
+                            <input type="text" id="inquiryDong" placeholder="101동">
+                        </div>
+                        <div class="form-group">
+                            <label for="inquiryHo">호수</label>
+                            <input type="text" id="inquiryHo" placeholder="1001호">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="inquiryName">이름 <span class="required">*</span></label>
+                            <input type="text" id="inquiryName" required placeholder="이름">
+                        </div>
+                        <div class="form-group">
+                            <label for="inquiryPhone">전화번호 <span class="required">*</span></label>
+                            <input type="tel" id="inquiryPhone" placeholder="010-0000-0000">
+                            <p class="inquiry-phone-notice">⚠ 반드시 본인의 전화번호를 정확하게 기입해주세요. 답변 알림 문자가 발송됩니다.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="inquiryTitle">제목 <span class="required">*</span></label>
+                        <input type="text" id="inquiryTitle" required placeholder="문의 제목">
+                    </div>
+                    <div class="form-group">
+                        <label for="inquiryContent">내용 <span class="required">*</span></label>
+                        <textarea id="inquiryContent" rows="4" required placeholder="문의 내용을 입력하세요"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="inquiryPublic" name="isPublic" value="true" checked>
+                            <span>공개 문의로 등록 (다른 입주민이 볼 수 있습니다)</span>
+                        </label>
+                    </div>
+                    <div class="btn-group">
+                        <button type="button" class="btn-secondary" onclick="closeInquiryModal()">취소</button>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-paper-plane"></i> 등록
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 해지 신청 모달 (bottom-sheet) -->
+    <div id="cancellationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-times-circle"></i> 레슨 해지 신청</h2>
+                <button class="modal-close" onclick="closeCancellationModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- 해지 안내 -->
+                <div class="alert-box alert-warning" style="margin-bottom:14px">
+                    <strong>⚠️ 해지 신청 전 필독</strong>
+                    <ul>
+                        <li>접수 기간: <strong>매월 22일 09시 ~ 26일 09시 (KST)</strong></li>
+                        <li>신청 즉시 자동 승인되며 <strong>번복 불가</strong> — 신중하게 신청해 주세요</li>
+                        <li>당월은 정상 수강 후 <strong>익월부터 해지</strong> 적용</li>
+                    </ul>
+                </div>
+
+                <!-- STEP 1: 본인 확인 -->
+                <div id="cancelStep1Main">
+                    <div style="background:#eff6ff;border:1.5px solid #3b82f6;border-radius:10px;padding:14px;margin-bottom:12px">
+                        <div style="font-weight:700;font-size:.88rem;color:#1e40af;margin-bottom:10px">
+                            <i class="fas fa-search"></i> STEP 1 — 본인 확인 (동·호수·전화번호 입력)
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="cancelDong">동 <span class="required">*</span></label>
+                                <input type="text" id="cancelDong" placeholder="예: 101" inputmode="numeric"
+                                    style="border:1.5px solid #93c5fd" oninput="resetCancelLookupMain()">
+                            </div>
+                            <div class="form-group">
+                                <label for="cancelHo">호수 <span class="required">*</span></label>
+                                <input type="text" id="cancelHo" placeholder="예: 1001" inputmode="numeric"
+                                    style="border:1.5px solid #93c5fd" oninput="resetCancelLookupMain()">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom:12px">
+                            <label for="cancelPhone">전화번호 <span class="required">*</span></label>
+                            <input type="tel" id="cancelPhone" placeholder="010-0000-0000"
+                                style="border:1.5px solid #93c5fd" oninput="formatCancelPhone(this); resetCancelLookupMain()">
+                        </div>
+                        <button type="button" id="cancelLookupBtnMain" onclick="lookupCancelProgramsMain()"
+                            style="width:100%;padding:11px;background:#3b82f6;color:#fff;border:none;
+                                   border-radius:8px;font-size:.92rem;font-weight:700;cursor:pointer">
+                            <i class="fas fa-search"></i> 수강 중인 프로그램 조회
+                        </button>
+                        <div id="cancelLookupMsgMain" style="margin-top:8px;font-size:.82rem;display:none"></div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: 프로그램 선택 + 사유 (조회 후 표시) -->
+                <div id="cancelStep2Main" style="display:none">
+                    <div style="background:#f0fdf4;border:1.5px solid #22c55e;border-radius:10px;padding:14px;margin-bottom:12px">
+                        <div style="font-weight:700;font-size:.88rem;color:#166534;margin-bottom:10px">
+                            <i class="fas fa-check-circle"></i> STEP 2 — 해지할 프로그램 선택
+                        </div>
+                        <!-- 본인 정보 확인 표시 -->
+                        <div id="cancelPersonInfoMain"
+                             style="font-size:.83rem;color:#374151;margin-bottom:10px;
+                                    background:#fff;border-radius:6px;padding:8px 10px;border:1px solid #d1fae5"></div>
+                        <!-- 프로그램 드롭다운 -->
+                        <div class="form-group" style="margin-bottom:6px">
+                            <label>해지할 프로그램 <span class="required">*</span></label>
+                            <select id="cancelProgramMain"
+                                style="border:1.5px solid #22c55e;font-weight:600;font-size:.9rem"
+                                onchange="onCancelProgramChangeMain()">
+                                <option value="">-- 선택 --</option>
+                            </select>
+                        </div>
+                        <!-- 수강료 미리보기 -->
+                        <div id="cancelFeePreviewMain"
+                             style="display:none;font-size:.82rem;color:#0369a1;background:#e0f2fe;
+                                    border:1px solid #7dd3fc;border-radius:6px;padding:6px 10px;margin-bottom:10px">
+                        </div>
+                        <!-- 해지 사유 -->
+                        <div class="form-group" style="margin-bottom:8px">
+                            <label for="cancelReasonMain">해지 사유 <span class="required">*</span></label>
+                            <select id="cancelReasonMain"
+                                style="border:1.5px solid #d1d5db">
+                                <option value="">선택하세요</option>
+                                <option value="개인 사정">개인 사정</option>
+                                <option value="건강 문제">건강 문제</option>
+                                <option value="이사/전출">이사/전출</option>
+                                <option value="시간 불일치">시간 불일치</option>
+                                <option value="비용 문제">비용 문제</option>
+                                <option value="기타">기타</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0">
+                            <label for="cancelReasonDetailMain">상세 사유 (선택)</label>
+                            <textarea id="cancelReasonDetailMain" rows="3"
+                                placeholder="해지 사유를 상세히 입력해주세요"
+                                style="border:1.5px solid #d1d5db"></textarea>
+                        </div>
+                    </div>
+                    <div class="btn-group" style="flex-direction:column;gap:8px">
+                        <button type="button" id="cancelSubmitBtnMain" onclick="submitCancellationMain()"
+                            style="width:100%;padding:13px;background:#dc2626;color:#fff;border:none;
+                                   border-radius:8px;font-size:.95rem;font-weight:700;cursor:pointer">
+                            <i class="fas fa-times-circle"></i> 해지 신청하기
+                        </button>
+                        <button type="button" onclick="resetCancelFormMain()"
+                            style="width:100%;padding:9px;background:#f3f4f6;color:#6b7280;border:none;
+                                   border-radius:8px;font-size:.83rem;font-weight:600;cursor:pointer">
+                            <i class="fas fa-redo"></i> 다시 조회
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 커리큘럼 모달 (bottom-sheet) -->
+    <div id="curriculumModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-calendar-alt"></i> 월별 커리큘럼</h2>
+                <button class="modal-close" onclick="closeCurriculumModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="curriculum-month-select">
+                    <select id="curriculumMonthSelect" onchange="loadCurriculum()">
+                        <option value="">월을 선택하세요</option>
+                    </select>
+                </div>
+                <div id="curriculumContent" class="curriculum-content-box">
+                    <div class="empty-hint">월을 선택해주세요.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 강사 소개 모달 (bottom-sheet) -->
+    <div id="instructorsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-user-tie"></i> 강사 소개</h2>
+                <button class="modal-close" onclick="closeInstructorsModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="instructorsContent">
+                <div class="loading-mini">
+                    <i class="fas fa-spinner fa-spin"></i> 불러오는 중...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 관리자 로그인 모달 — 2단계 (일반 / 총괄) -->
+    <div id="adminPasswordModal" class="modal center">
+        <div class="modal-content center-modal admin-login-modal">
+
+            <!-- ── 공통 헤더 ── -->
+            <div class="admin-login-header">
+                <div class="admin-login-brand">
+                    <i class="fas fa-building"></i>
+                    <span>관리자 접근</span>
+                </div>
+                <button class="modal-close" onclick="closeAdminPasswordModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- ══ STEP 1: 일반 관리자 로그인 ══ -->
+            <div id="adminStep1" class="admin-login-step">
+                <div class="admin-login-hint">
+                    <i class="fas fa-info-circle"></i>
+                    단지를 선택하고 관리자 비밀번호를 입력하세요
+                </div>
+
+                <!-- 단지 드롭다운 -->
+                <div class="admin-form-group">
+                    <label class="admin-form-label">
+                        <i class="fas fa-city"></i> 단지 선택
+                    </label>
+                    <div class="admin-select-wrap">
+                        <select id="adminComplexSelect" class="admin-select">
+                            <option value="">— 단지를 선택하세요 —</option>
+                        </select>
+                        <i class="fas fa-chevron-down admin-select-arrow"></i>
+                    </div>
+                    <div id="adminComplexLoadStatus" class="admin-load-status"></div>
+                </div>
+
+                <!-- 관리자 비밀번호 -->
+                <div class="admin-form-group">
+                    <label class="admin-form-label">
+                        <i class="fas fa-lock"></i> 관리자 비밀번호
+                    </label>
+                    <input type="password" id="adminPasswordInput"
+                           placeholder="비밀번호 입력"
+                           autocomplete="off"
+                           onkeydown="if(event.key==='Enter') checkAdminPassword()">
+                </div>
+
+                <p id="adminPasswordError" class="admin-error-msg" style="display:none">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="adminPasswordErrorText">비밀번호가 올바르지 않습니다</span>
+                </p>
+
+                <!-- 버튼 영역 -->
+                <button id="adminLoginBtn" class="admin-btn admin-btn-primary" onclick="checkAdminPassword()">
+                    <i class="fas fa-sign-in-alt"></i> 입장하기
+                </button>
+
+                <div class="admin-divider"><span>또는</span></div>
+
+                <!-- 총괄 관리자 전환 -->
+                <button class="admin-btn admin-btn-master" onclick="showAdminStep2()">
+                    <i class="fas fa-crown"></i> 총괄 관리자로 로그인
+                </button>
+            </div>
+
+            <!-- ══ STEP 2: 총괄 관리자 로그인 ══ -->
+            <div id="adminStep2" class="admin-login-step" style="display:none">
+                <div class="admin-master-banner">
+                    <i class="fas fa-crown"></i>
+                    <div>
+                        <strong>총괄 관리자</strong>
+                        <span>전체 단지 통합 관리</span>
+                    </div>
+                </div>
+
+                <div class="admin-form-group">
+                    <label class="admin-form-label">
+                        <i class="fas fa-key"></i> 마스터 비밀번호
+                    </label>
+                    <input type="password" id="masterPasswordInput"
+                           placeholder="마스터 비밀번호 입력"
+                           autocomplete="off"
+                           onkeydown="if(event.key==='Enter') checkMasterPassword()">
+                </div>
+
+                <p id="masterPasswordError" class="admin-error-msg" style="display:none">
+                    <i class="fas fa-exclamation-circle"></i> 마스터 비밀번호가 올바르지 않습니다
+                </p>
+
+                <button id="masterLoginBtn" class="admin-btn admin-btn-master-action" onclick="checkMasterPassword()">
+                    <i class="fas fa-crown"></i> 총괄 관리자 입장
+                </button>
+
+                <div class="admin-divider"><span>또는</span></div>
+
+                <button class="admin-btn admin-btn-back" onclick="showAdminStep1()">
+                    <i class="fas fa-arrow-left"></i> 일반 관리자 로그인으로
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 성공 모달 (center) -->
+    <div id="successModal" class="modal center">
+        <div class="modal-content center-modal">
+            <div class="modal-body" style="text-align:center">
+                <i class="fas fa-check-circle result-icon success"></i>
+                <p class="result-title">신청이 완료되었습니다!</p>
+                <p class="result-message">
+                    신청하신 프로그램이 최종 승인되었습니다.<br>
+                    궁금하신 사항은 문의처에 접수해주세요. 😊
+                </p>
+                <button class="btn-primary btn-full" style="margin-top:16px" onclick="closeModal()">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 성공 알림 모달 (center) -->
+    <div id="successNotificationModal" class="modal center">
+        <div class="modal-content center-modal">
+            <div class="modal-body" style="text-align:center">
+                <i class="fas fa-check-circle result-icon success"></i>
+                <p class="result-title">신청이 완료되었습니다!</p>
+                <div id="successNotificationContent" class="result-detail" style="text-align:left"></div>
+                <button class="btn-primary btn-full" style="margin-top:14px" onclick="closeSuccessNotificationModal()">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 중복 신청 경고 모달 (center) -->
+    <div id="duplicateWarningModal" class="modal center">
+        <div class="modal-content center-modal">
+            <div class="modal-body" style="text-align:center">
+                <i class="fas fa-exclamation-triangle result-icon warning"></i>
+                <p class="result-title">이미 수강 신청 내역이 있습니다</p>
+                <div id="duplicateWarningContent" class="result-detail" style="text-align:left"></div>
+                <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;
+                            padding:12px 14px;margin-top:12px;text-align:left;font-size:.88rem;line-height:1.6">
+                    <p style="margin:0 0 4px;font-weight:700;color:#92400e">
+                        <i class="fas fa-info-circle"></i> 안내
+                    </p>
+                    <p style="margin:0;color:#78350f">
+                        중복 수강을 희망하시는 경우<br>
+                        <strong>관리자에게 별도 문의</strong>해 주세요.
+                    </p>
+                </div>
+                <button class="btn-primary btn-full" style="margin-top:16px" onclick="closeDuplicateWarningModal()">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 해지 기간 아님 경고 모달 (center) -->
+    <div id="cancellationPeriodWarningModal" class="modal center">
+        <div class="modal-content center-modal">
+            <div class="modal-body" style="text-align:center">
+                <i class="fas fa-calendar-times result-icon warning"></i>
+                <p class="result-title">해지 신청 기간이 아닙니다</p>
+                <p class="result-message">
+                    해지 신청은 <strong style="color:#e74c3c">매월 22일 09시부터 26일 09시까지 (KST)</strong>만 가능합니다.
+                </p>
+                <div id="cancellationPeriodWarningContent" class="result-detail" style="text-align:left"></div>
+                <button class="btn-primary btn-full" style="margin-top:14px" onclick="closeCancellationPeriodWarning()">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 이미지 전체화면 모달 -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal(event)">
+        <span class="image-modal-close" onclick="closeImageModal()">&times;</span>
+        <img class="image-modal-content" id="modalImage" alt="">
+    </div>
+
+    <!-- 이미지 전체화면 모달 -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal(event)">
+        <span class="image-modal-close" onclick="closeImageModal()">&times;</span>
+        <img class="image-modal-content" id="modalImage" alt="">
+    </div>
+
+    <!-- ★ 내 신청 취소/변경 모달 (매월 20~27일) -->
+    <div id="myManageModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
+         z-index:9999;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto">
+        <div style="background:#fff;border-radius:16px;width:100%;max-width:480px;overflow:hidden;
+                    box-shadow:0 20px 60px rgba(0,0,0,.25);margin:auto">
+            <!-- 헤더 -->
+            <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:16px 18px;
+                        display:flex;align-items:center;justify-content:space-between">
+                <span style="font-weight:700;font-size:1rem">
+                    <i class="fas fa-edit"></i> 내 신청 취소 · 변경
+                </span>
+                <button onclick="closeMyManageModal()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <!-- 기간 안내 배너 -->
+            <div id="managePeriodBanner" style="padding:12px 18px 0"></div>
+            <!-- 바디 -->
+            <div style="padding:14px 18px 18px">
+                <!-- 본인 확인 입력 -->
+                <div id="manageInputSection">
+                    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;
+                                padding:10px 13px;margin-bottom:14px;font-size:.82rem;color:#1e40af;line-height:1.6">
+                        <i class="fas fa-info-circle"></i>
+                        동·호수와 전화번호 뒷 4자리를 입력하면<br>
+                        나의 신청 내역을 조회하고 <strong>취소 또는 시간대 변경</strong>을 할 수 있습니다.
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                        <div>
+                            <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">동 <span style="color:#ef4444">*</span></label>
+                            <input type="text" id="manageDong" placeholder="예: 101" inputmode="numeric"
+                                style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.9rem;outline:none"
+                                oninput="this.style.borderColor='#d1d5db'">
+                        </div>
+                        <div>
+                            <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">호수 <span style="color:#ef4444">*</span></label>
+                            <input type="text" id="manageHo" placeholder="예: 1001" inputmode="numeric"
+                                style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.9rem;outline:none"
+                                oninput="this.style.borderColor='#d1d5db'">
+                        </div>
+                    </div>
+                    <div style="margin-bottom:14px">
+                        <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">
+                            전화번호 뒷 4자리 <span style="color:#ef4444">*</span>
+                        </label>
+                        <input type="text" id="managePhone4" placeholder="예: 1234" maxlength="4" inputmode="numeric"
+                            style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.9rem;outline:none"
+                            oninput="this.style.borderColor='#d1d5db'"
+                            onkeydown="if(event.key==='Enter') loadMyManageList()">
+                    </div>
+                    <button onclick="loadMyManageList()" id="manageSearchBtn"
+                        style="width:100%;padding:11px;border:none;border-radius:9px;
+                               background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;
+                               font-size:.93rem;font-weight:700;cursor:pointer">
+                        <i class="fas fa-search"></i> 내 신청 내역 불러오기
+                    </button>
+                </div>
+                <!-- 결과 영역 -->
+                <div id="manageResult" style="margin-top:14px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 내 신청 조회 모달 -->
+    <div id="myLookupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+         z-index:9999;align-items:center;justify-content:center;padding:16px">
+        <div style="background:#fff;border-radius:16px;width:100%;max-width:440px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+            <!-- 헤더 -->
+            <div style="background:var(--color-primary,#4f46e5);color:#fff;padding:16px 18px;
+                        display:flex;align-items:center;justify-content:space-between">
+                <span style="font-weight:700;font-size:1rem">
+                    <i class="fas fa-search"></i> 내 신청 조회
+                </span>
+                <button onclick="closeMyLookupModal()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <!-- 바디 -->
+            <div style="padding:18px">
+                <!-- 입력 안내 -->
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;
+                            padding:10px 13px;margin-bottom:16px;font-size:.82rem;color:#1e40af;line-height:1.6">
+                    <i class="fas fa-info-circle"></i>
+                    <strong> 동·호수</strong>와 <strong>전화번호 뒷 4자리</strong>를 입력하면<br>
+                    승인된 프로그램을 조회할 수 있습니다.
+                </div>
+                <!-- 입력 폼 -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+                    <div>
+                        <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">
+                            동 <span style="color:#ef4444">*</span>
+                        </label>
+                        <input type="text" id="lookupDong" placeholder="예: 101" inputmode="numeric"
+                            style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #d1d5db;
+                                   border-radius:8px;font-size:.9rem;outline:none"
+                            oninput="this.style.borderColor='#d1d5db'">
+                    </div>
+                    <div>
+                        <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">
+                            호수 <span style="color:#ef4444">*</span>
+                        </label>
+                        <input type="text" id="lookupHo" placeholder="예: 1001" inputmode="numeric"
+                            style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #d1d5db;
+                                   border-radius:8px;font-size:.9rem;outline:none"
+                            oninput="this.style.borderColor='#d1d5db'">
+                    </div>
+                </div>
+                <div style="margin-bottom:14px">
+                    <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">
+                        전화번호 뒷 4자리 <span style="color:#ef4444">*</span>
+                    </label>
+                    <input type="text" id="lookupPhone4" placeholder="예: 1234" maxlength="4" inputmode="numeric"
+                        style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #d1d5db;
+                               border-radius:8px;font-size:.9rem;outline:none"
+                        oninput="this.style.borderColor='#d1d5db'"
+                        onkeydown="if(event.key==='Enter') lookupMyApplication()">
+                </div>
+                <button onclick="lookupMyApplication()" id="lookupBtn"
+                    style="width:100%;padding:11px;border:none;border-radius:9px;
+                           background:var(--color-primary,#4f46e5);color:#fff;
+                           font-size:.93rem;font-weight:700;cursor:pointer">
+                    <i class="fas fa-search"></i> 조회하기
+                </button>
+                <!-- 결과 영역 -->
+                <div id="lookupResult" style="margin-top:14px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 환불 신청 모달 -->
+    <div id="refundRequestModal"
+         style="display:none;position:fixed;inset:0;z-index:9999;
+                background:rgba(17,24,39,.55);backdrop-filter:blur(2px);
+                overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 12px">
+        <div style="max-width:480px;width:100%;border-radius:14px;overflow:hidden;
+                    background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.25);
+                    margin:auto;position:relative;min-height:0">
+            <div class="modal-header" style="background:#e53e3e;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
+                <span style="font-weight:700;font-size:1rem"><i class="fas fa-file-invoice"></i> 환불 신청</span>
+                <button onclick="closeRefundRequestModal()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="padding:18px">
+
+                <!-- 주의사항 박스 -->
+                <div style="background:#fff5f5;border:1.5px solid #feb2b2;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:.84rem;color:#742a2a;line-height:1.7">
+                    <strong style="display:block;margin-bottom:6px;color:#c53030"><i class="fas fa-exclamation-triangle"></i> 환불 신청 전 반드시 확인하세요</strong>
+                    <ul style="margin:0;padding-left:18px">
+                        <li>환불 신청은 <strong>반드시 서류 제출</strong>로만 가능합니다</li>
+                        <li><strong>SMS · 통화 등 구두(口頭) 요청은 인정되지 않습니다</strong></li>
+                        <li>환불 가능 사유: 6개월 이상 운동 불가 질병·부상 (진단서 필수) / 6개월 이상 해외 이주 (비자·항공권 필수)</li>
+                        <li>승인 시 결제금액의 <strong>10% 위약금</strong> 공제 + 수강 횟수(회당 20,000원) 차감 후 환급</li>
+                    </ul>
+                </div>
+
+                <!-- 신청 양식 -->
+                <div style="display:flex;flex-direction:column;gap:12px">
+                    <div>
+                        <label style="font-size:.83rem;font-weight:600;color:#4a4a6a;display:block;margin-bottom:4px">동 <span style="color:#e53e3e">*</span></label>
+                        <input type="text" id="refundDong" placeholder="예: 101동" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:.9rem">
+                    </div>
+                    <div>
+                        <label style="font-size:.83rem;font-weight:600;color:#4a4a6a;display:block;margin-bottom:4px">호수 <span style="color:#e53e3e">*</span></label>
+                        <input type="text" id="refundHo" placeholder="예: 1001호" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:.9rem">
+                    </div>
+                    <div>
+                        <label style="font-size:.83rem;font-weight:600;color:#4a4a6a;display:block;margin-bottom:4px">이름 <span style="color:#e53e3e">*</span></label>
+                        <input type="text" id="refundName" placeholder="이름을 입력하세요" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:.9rem">
+                    </div>
+                    <div>
+                        <label style="font-size:.83rem;font-weight:600;color:#4a4a6a;display:block;margin-bottom:4px">연락처 <span style="color:#e53e3e">*</span></label>
+                        <input type="tel" id="refundPhone" placeholder="010-0000-0000" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:.9rem">
+                    </div>
+                    <div>
+                        <label style="font-size:.83rem;font-weight:600;color:#4a4a6a;display:block;margin-bottom:4px">환불 사유 <span style="color:#e53e3e">*</span></label>
+                        <select id="refundReason" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:.9rem;background:#fff">
+                            <option value="">선택하세요</option>
+                            <option value="injury">6개월 이상 운동 불가 질병·부상 (진단서 제출 필수)</option>
+                            <option value="emigration">6개월 이상 해외 이주 (비자·항공권 제출 필수)</option>
+                            <option value="other">기타</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:.83rem;font-weight:600;color:#4a4a6a;display:block;margin-bottom:4px">상세 내용</label>
+                        <textarea id="refundDetail" rows="3" placeholder="구체적인 사유를 입력해주세요" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d1d5db;border-radius:7px;font-size:.9rem;resize:vertical"></textarea>
+                    </div>
+
+                    <!-- ▼ 증빙서류 첨부 -->
+                    <div id="refundDocSection">
+                        <label style="font-size:.83rem;font-weight:600;color:#4a4a6a;display:block;margin-bottom:6px">
+                            증빙서류 첨부 <span style="color:#e53e3e">*</span>
+                            <span style="font-size:.75rem;font-weight:400;color:#6b7280;margin-left:6px">최대 5개 · 각 10MB 이하</span>
+                        </label>
+                        <!-- 사유별 안내 -->
+                        <div id="refundDocGuide" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:9px 12px;margin-bottom:8px;font-size:.79rem;color:#1e40af;line-height:1.65"></div>
+                        <!-- 파일 선택 영역 -->
+                        <div id="refundDocDropZone"
+                             style="border:2px dashed #d1d5db;border-radius:10px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s"
+                             onclick="document.getElementById('refundDocInput').click()"
+                             ondragover="event.preventDefault();this.style.borderColor='#4f46e5';this.style.background='#f5f3ff'"
+                             ondragleave="this.style.borderColor='#d1d5db';this.style.background=''"
+                             ondrop="handleRefundDocDrop(event)">
+                            <i class="fas fa-cloud-upload-alt" style="font-size:1.8rem;color:#9ca3af;margin-bottom:6px;display:block"></i>
+                            <span style="font-size:.84rem;color:#6b7280">파일을 드래그하거나 <strong style="color:#4f46e5">클릭해서 선택</strong></span><br>
+                            <span style="font-size:.76rem;color:#9ca3af">JPG · PNG · PDF 지원</span>
+                        </div>
+                        <input type="file" id="refundDocInput" multiple accept="image/*,.pdf"
+                               style="display:none" onchange="handleRefundDocSelect(this.files)">
+                        <!-- 선택된 파일 목록 -->
+                        <div id="refundDocList" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+                    </div>
+                    <!-- ▲ 증빙서류 첨부 -->
+                </div>
+
+                <div style="background:#fef9c3;border:1px solid #fde047;border-radius:7px;padding:10px 12px;margin-top:14px;font-size:.8rem;color:#713f12;line-height:1.6">
+                    <i class="fas fa-info-circle"></i>
+                    이 신청서는 <strong>접수 요청</strong>이며, 실제 환불은 증빙서류 제출 및 관리자 검토 후 처리됩니다. 접수 후 담당자가 연락드립니다.
+                </div>
+            </div>
+            <div style="padding:12px 18px;display:flex;gap:8px;border-top:1px solid #f0f0f0">
+                <button onclick="closeRefundRequestModal()" style="flex:1;padding:10px;border:1px solid #d1d5db;border-radius:7px;background:#fff;font-size:.9rem;cursor:pointer;color:#555">취소</button>
+                <button onclick="submitRefundRequest()" style="flex:2;padding:10px;border:none;border-radius:7px;background:#e53e3e;color:#fff;font-size:.9rem;font-weight:700;cursor:pointer"><i class="fas fa-paper-plane"></i> 환불 신청 접수</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FAB: 해지 신청 -->
+    <button class="fab-cancel" onclick="showCancellationForm()" title="레슨 해지 신청">
+        <i class="fas fa-times"></i>
+    </button>
+
+    <script src="js/complex-context.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+    /* ────────────────────────────────────────────────────
+       로딩 화면 제어
+       main.js의 initializeComplexContext() 완료 후 로딩 화면 숨기고 메인 표시
+    ──────────────────────────────────────────────────── */
+    (function() {
+        const _orig = window.initializeComplexContext;
+        window._showMain = function() {
+            const ls = document.getElementById('loadingScreen');
+            const mc = document.getElementById('mainContainer');
+            if (ls) {
+                ls.style.opacity = '0';
+                ls.style.transition = 'opacity .3s';
+                setTimeout(() => { ls.style.display = 'none'; }, 300);
+            }
+            if (mc) mc.style.display = 'block';
+        };
+        window.initializeComplexContext = async function() {
+            const result = typeof _orig === 'function' ? await _orig() : null;
+            window._showMain();
+            return result;
+        };
+    })();
+
+    /* ────────────────────────────────────────────────────
+       퀵 버튼 유틸
+    ──────────────────────────────────────────────────── */
+    function scrollToNotices() {
+        const el = document.getElementById('noticesSection');
+        if (el && el.style.display !== 'none') {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            // 공지가 없을 때는 맨 위로
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
+    /* ────────────────────────────────────────────────────
+       강사 소개 모달 (인라인 구현 – main.js 미구현 기능)
+    ──────────────────────────────────────────────────── */
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    async function openInstructorsModal() {
+        const modal   = document.getElementById('instructorsModal');
+        const content = document.getElementById('instructorsContent');
+        modal.classList.add('active');
+        content.innerHTML = '<div class="loading-mini"><i class="fas fa-spinner fa-spin"></i> 불러오는 중...</div>';
+        try {
+            const complexId = window.complexContext && window.complexContext.getComplexId
+                ? window.complexContext.getComplexId() : null;
+            const params = new URLSearchParams({ limit: 100 });
+            if (complexId) params.set('complexId', complexId);
+            const res  = await fetch(`/api/instructors?${params}`);
+            const data = await res.json();
+            const list = (data.data || [])
+                .filter(i => i.is_active)
+                .sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+
+            if (!list.length) {
+                content.innerHTML = '<div class="empty-hint"><i class="fas fa-user-slash"></i> 등록된 강사 정보가 없습니다</div>';
+                return;
+            }
+            content.innerHTML = '<div class="instructor-card-list">' +
+                list.map(ins => {
+                    const certs = Array.isArray(ins.certifications)
+                        ? ins.certifications
+                        : (ins.certifications || '').split(',').map(c => c.trim()).filter(Boolean);
+                    return `
+                    <div class="instructor-card">
+                        ${ins.photo_url
+                            ? `<img class="instructor-photo" src="${escapeHtml(ins.photo_url)}"
+                                    alt="${escapeHtml(ins.name)}"
+                                    onclick="showInstructorImage('${ins.photo_url.replace(/'/g,"\\'")}','${escapeHtml(ins.name)}')">`
+                            : `<div class="instructor-photo-placeholder"><i class="fas fa-user"></i></div>`}
+                        <div class="instructor-info">
+                            <h4>${escapeHtml(ins.name)}</h4>
+                            <div class="instructor-title">${escapeHtml(ins.position || '')}</div>
+                            ${ins.experience_years
+                                ? `<p style="font-size:.8rem;color:#7f8c8d;margin-bottom:6px">
+                                       <i class="fas fa-calendar-check"></i> 경력 ${ins.experience_years}년</p>` : ''}
+                            ${ins.bio ? `<div class="instructor-bio">${escapeHtml(ins.bio)}</div>` : ''}
+                            ${certs.length
+                                ? `<div class="instructor-certs">
+                                       ${certs.map(c => `<span><i class="fas fa-check-circle"></i>${escapeHtml(c)}</span>`).join('')}
+                                   </div>` : ''}
+                        </div>
+                    </div>`;
+                }).join('') + '</div>';
+        } catch(e) {
+            content.innerHTML = '<div class="error-hint"><i class="fas fa-exclamation-triangle"></i> 강사 정보를 불러오지 못했습니다</div>';
+        }
+    }
+
+    function closeInstructorsModal() {
+        document.getElementById('instructorsModal').classList.remove('active');
+    }
+
+    function showInstructorImage(url) {
+        const modal = document.getElementById('imageModal');
+        document.getElementById('modalImage').src = url;
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeImageModal(e) {
+        if (e && e.target && e.target.id === 'modalImage') return;
+        document.getElementById('imageModal').classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeImageModal();
+            closeInstructorsModal();
+        }
+    });
+
+    /* ────────────────────────────────────────────────────
+       로딩 완료 폴백 (2초 후 강제 표시)
+    ──────────────────────────────────────────────────── */
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            const ls = document.getElementById('loadingScreen');
+            if (ls && ls.style.display !== 'none' && ls.style.opacity !== '0') {
+                window._showMain && window._showMain();
+            }
+        }, 5000);
+    });
+    </script>
+</body>
+</html>
