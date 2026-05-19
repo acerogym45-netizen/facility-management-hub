@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="shared-config.js"></script>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
     
@@ -160,6 +161,33 @@
     </footer>
 
     <script>
+        // Supabase 클라이언트 초기화
+        let sb = null;
+        
+        window.addEventListener('DOMContentLoaded', async () => {
+            sb = createSharedSupabaseClient();
+            if (sb) {
+                await loadFacilities();
+            }
+        });
+        
+        // 시설 정보 로드
+        async function loadFacilities() {
+            try {
+                const { data, error } = await sb
+                    .from('facilities')
+                    .select('*')
+                    .in('type', ['apartment', 'fitness']);
+                
+                if (error) throw error;
+                
+                console.log('✅ Facilities loaded:', data);
+                // 실제 시설 데이터로 UI 업데이트 가능
+            } catch (err) {
+                console.error('❌ Failed to load facilities:', err);
+            }
+        }
+        
         function goToFacility(type) {
             if (type === 'apartment') {
                 // ERP 시스템으로 이동

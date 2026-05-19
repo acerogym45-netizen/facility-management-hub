@@ -3113,9 +3113,14 @@
       document.title = 'KINDWON Admin v' + Date.now();
       console.log('🔵 Script 시작 - 버전:', Date.now());
       
-      const SUPABASE_URL = 'https://qgpqhtuynxhmgawakjxe.supabase.co';
+      // 🏢 통합 시설 관리 플랫폼 - Supabase 설정
+      const SUPABASE_URL = 'https://awqatgkfrzusbidzosrx.supabase.co';
       const SUPABASE_ANON_KEY =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFncHFodHV5bnhobWdhd2FranhlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyOTQyNTEsImV4cCI6MjA4Mjg3MDI1MX0.WNljQIKDbeZCDlXe8fpBdZs58XRFfujGt7lBGfq_pVg';
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF3cWF0Z2tmcnp1c2JpZHpvc3J4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyMDg4MTksImV4cCI6MjA5NDc4NDgxOX0.P4d2_5tNaoVG_u0tuotQX2aMX0xvxMPS-9UL1TKZwWA';
+      
+      // 🏠 시설 ID (아파트/빌딩 관리)
+      const FACILITY_ID = '00000000-0000-0000-0000-000000000001'; // 청주SK뷰자이 아파트
+      
       const LOGIN_PIN = 'bdxi2026';
       const MASTER_PIN = 'master2026'; // 총괄 관리자 비밀번호 (로그인 & 문서 삭제)
       
